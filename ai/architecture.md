@@ -37,6 +37,12 @@ Job created (seed script) → matching engine selects eligible nodes → node po
 - Money: test currency only in Phase 1; payments are a Phase 2 decision
 - Mobile-first: designed and optimized for mobile devices; UI should feel like a native mobile application
 
+## Development Policy
+- Build as lean as possible: implement the bare minimum needed, write less than we need.
+- Adding something later is okay and preferred — prefer additive changes (new tables, columns, indexes, policies, triggers) that never require removing or restructuring existing things.
+- Removing something later is painful — avoid speculative features, constraints, and enforcement that can be deferred.
+- If a rule or check can be enforced in the app layer instead of the database, do that first; move it into the database only when it earns its place.
+
 ## Constraints
 - Must use Next.js + Supabase, hosted on Vercel
 - Mobile-first: app must be optimized for mobile devices and feel like a native mobile application
