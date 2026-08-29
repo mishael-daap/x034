@@ -11,20 +11,25 @@
 - Direct referrals only (no multi-level tracking).
 - A referral counts once the referred user purchases a node.
 - Unlock thresholds: 10 referrals → tier B, 30 referrals → tier A.
+- Referrals also count toward unlocking jobs that require n referrals (separate from tier gates).
 
 ## Jobs & Offers
 - Jobs are tiered (A/B/C) and posted by companies (simulated in Phase 1).
 - Each job has a pay rate per hour (set by the company), an estimated duration, and a fixed start time.
+- Each job can require a minimum number of qualifying referrals (n) to unlock. This requirement is separate from the job's tier: a C, B, or A tier job can require any number of referrals.
 - Node owners browse available jobs and choose the best offer.
 
 ## Matching & Earnings
 - A job requires a minimum node tier equal to its own tier.
 - A node can only join a job of its own tier or lower.
+- To unlock a job, the node owner must meet its referral requirement (qualifying referrals ≥ n), independent of node tier matching.
+- Both gates must be satisfied to join a job: node tier (equal or higher) and referral count (n or more).
 - Earnings are always the job's pay rate × duration, regardless of node tier.
 - A higher-tier node on a lower-tier job earns that job's tier pay (no bonus).
 
 ## Node Pool
 - A node owner can add their node to a job's pool until 1 hour before the job starts.
+- Only node owners who meet the job's referral requirement can join its pool.
 - Once a job has started, nodes can no longer be added or removed.
 - Nodes cannot be removed mid-job; removal is simply blocked (no penalty mechanic).
 
@@ -33,9 +38,8 @@
 - After completion, the node returns to available status.
 
 ## Withdrawals
-- Withdrawal capacity is unlocked by referrals: each qualifying referral unlocks $5.
-- Cap formula: withdrawals are allowed while (referrals × 5) ≥ (total withdrawn so far + requested amount).
-- Check is cumulative — total withdrawn tracks across all past withdrawals, so the gate cannot be bypassed with repeated small withdrawals.
+- A user can withdraw up to their available balance at any time.
+- Withdrawals are not capped or gated by referrals.
 
 ## Phase 1 Scope
 - All companies, jobs, and node "work" are simulated.
