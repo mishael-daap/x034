@@ -17,7 +17,7 @@ User → Frontend → API → Database
 Job created (seed script) → matching engine selects eligible nodes → node pool locks at start time → job completes → earnings credited to balance → withdrawal
 
 ## Core Entities
-- User — referral code, balance
+- User — referral code (balance via user_balances view)
 - Company — simulated company posting jobs
 - Job — tier, pay/hr (set by company), duration, start time, required referrals (n) to unlock, company
 - Node — tier, owner, specs (from tier), availability state

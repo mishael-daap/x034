@@ -17,15 +17,16 @@ Design the database schema for the compute marketplace and deliver the Supabase 
 - One committed/active assignment per node at a time (partial unique index)
 - earnings are derived, not stored: pay_per_hour × actual_duration_hours (computed at completion when creating the earnings transaction)
 - Amounts non-negative for jobs; Transaction amount is signed
-- RLS: private tables owner-only; companies, jobs, node_tiers publicly readable
+- RLS: private tables owner-only; companies, jobs, node_tiers publicly readable — deferred to the auth feature; Phase 1 sandbox data is open (test currency only)
 - Users are never hard-deleted (referral counts depend on them)
 - A job is worked by exactly one node; unselected pool candidates are cancelled at job start
-- User balance is a denormalized column, updated atomically with each Transaction insert
+- User balance is derived from the Transaction ledger via a view (user_balances); no balance column
 
 ## Acceptance Criteria
 - [ ] Migration applies cleanly on a fresh Supabase project
 - [ ] All tables exist with correct columns, types, PKs, FKs
 - [ ] node_tiers seeded with C/B/A matching business-rules.md
 - [ ] banks seeded with sample banks
-- [ ] RLS policies active (owner-only private data, public catalog/marketplace)
-- [ ] Constraints verified: unique referral_code, one active assignment per node, immutable referrer
+- [ ] user_balances view present and returns correct sums
+- [ ] Constraints verified: unique referral_code, no self-referral, valid statuses
+- [ ] RLS policies + trigger + partial assignment indexes deferred (added with later features)

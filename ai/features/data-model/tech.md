@@ -1,7 +1,7 @@
 # Technical Plan
 
 ## Components
-- supabase/migrations/0001_init.sql — schema (tables, constraints, indexes, RLS, trigger)
+- supabase/migrations/0001_init.sql — schema (tables, constraints, indexes, user_balances view)
 - supabase/seed.sql — seed node_tiers + banks
 - dependencies/supabase/docs.md — official Supabase docs (per dependency rules)
 - No API routes/services in this feature — schema only
@@ -20,7 +20,6 @@ User (profile) {
   referrer uuid → users.id (nullable, immutable)
   bank uuid → banks.id
   account_number text
-  balance numeric default 0
   created_at
 }
 
@@ -81,10 +80,24 @@ Transaction {
 }
 ```
 
+## View
+user_balances — balance per user, derived from the ledger (no balance column):
+
+```sql
+CREATE VIEW user_balances
+WITH (security_invoker = true) AS
+SELECT user_id, SUM(amount) AS balance
+FROM transactions
+GROUP BY user_id;
+```
+
+security_invoker applies the calling user's RLS to the underlying table, so users only see their own balance.
+
 ## Flow
-Migration creates tables in FK order (banks → companies → node_tiers → users → nodes → jobs → assignments → transactions) → indexes/constraints → RLS policies → trigger (referrer immutability) → seed → verify.
+Migration creates tables in FK order (banks → companies → node_tiers → users → nodes → jobs → assignments → transactions) → indexes/constraints → user_balances view → seed → verify.
 
 ## Notes
 - Supabase is a new dependency → docs required at ai/dependencies/supabase/docs.md before implementation
 - Migration run via Supabase CLI (supabase db push / db reset)
 - No application code in this feature
+- Deferred (additive later): RLS policies + grants (with auth feature), referrer-immutability trigger (app-enforced), partial unique indexes on assignments (with matching feature), compound transaction checks (app-enforced)
