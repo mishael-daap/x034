@@ -42,7 +42,7 @@ You will read `roadmap.md` and start implementing the next incomplete item in it
 **File Creation**
 - After approval, create:
   ```
-  /features/<feature-name>/
+  ai/features/<feature-name>/
     spec.md
     tech.md
     tasks.md

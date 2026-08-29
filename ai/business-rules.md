@@ -1,17 +1,18 @@
 # Business Rules
 
 ## Node Tiers
-- Tier C (Standard): 4 vCPU / 16 GB, $10 equivalent. Purchasable on signup by any user.
-- Tier B (Advanced): 8 vCPU / 32 GB, $25 equivalent. Unlocks with 10 direct referrals.
-- Tier A (Top): 16 vCPU / 64 GB, $50 equivalent. Unlocks with 30 direct referrals.
+- Tier C (Standard): 4 vCPU / 16 GB, $10 equivalent.
+- Tier B (Advanced): 8 vCPU / 32 GB, $25 equivalent.
+- Tier A (Top): 16 vCPU / 64 GB, $50 equivalent.
+- Any tier can be purchased by paying its price — no referral requirement to unlock tiers.
 - A user must purchase a node to count as a referral for someone else.
 - A user can own nodes of multiple tiers.
 
 ## Referrals
 - Direct referrals only (no multi-level tracking).
 - A referral counts once the referred user purchases a node.
-- Unlock thresholds: 10 referrals → tier B, 30 referrals → tier A.
-- Referrals also count toward unlocking jobs that require n referrals (separate from tier gates).
+- Referrals gate access to jobs that require n referrals (separate from the node tier requirement).
+- Referrals do NOT gate tier purchases — all tiers are available to anyone who pays.
 
 ## Jobs & Offers
 - Jobs are tiered (A/B/C) and posted by companies (simulated in Phase 1).

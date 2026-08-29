@@ -21,9 +21,9 @@ Job created (seed script) → matching engine selects eligible nodes → node po
 - Company — simulated company posting jobs
 - Job — tier, pay/hr (set by company), duration, start time, required referrals (n) to unlock, company
 - Node — tier, owner, specs (from tier), availability state
-- NodeTier — C/B/A: vCPU, RAM, price, referrals required (seeded entity)
+- NodeTier — C/B/A: vCPU, RAM, price (seeded entity)
 - Assignment — node + job lifecycle: committed → active → completed; locks at start; records actual duration + earnings at completion
-- Referral — referrer → referee; qualifies when referee purchases a node
+- Referral (tracked via users.referrer) — direct only; qualifies when referee purchases a node
 - Transaction — balance ledger (earnings in, withdrawals out)
 - Withdrawal — amount, status
 
@@ -34,10 +34,12 @@ Job created (seed script) → matching engine selects eligible nodes → node po
 - Matching: node tier must meet or exceed job tier; jobs also have an independent referral requirement (n qualifying referrals) to unlock
 - Earnings: always the job's pay rate, regardless of node tier (no bonus for higher-tier nodes)
 - Node pool: commit allowed until 1 hour before start; locked at start
-- Referrals: direct only, tracked by referral code; gate access to higher node tiers and job unlocks
+- Referrals: direct only, tracked by referral code; gate access to jobs with a referral requirement (not tier purchases)
 - Money: test currency only in Phase 1; payments are a Phase 2 decision
+- Mobile-first: designed and optimized for mobile devices; UI should feel like a native mobile application
 
 ## Constraints
 - Must use Next.js + Supabase, hosted on Vercel
+- Mobile-first: app must be optimized for mobile devices and feel like a native mobile application
 - No real money or real compute in Phase 1
 - Node cannot be added to or removed from a job once it has started

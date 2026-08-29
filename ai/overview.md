@@ -12,14 +12,15 @@ Individuals with compute capacity have no easy way to monetize it, and companies
 
 ## Core Features
 - Signup and node purchase (tier C available on signup)
-- Tiered node system (C = entry tier; B and A unlocked via referrals; rules in business-rules.md)
+- Tiered node system (C/B/A, purchasable by anyone; rules in business-rules.md)
 - Compute marketplace with simulated jobs (pay per hour, duration, start time, referral requirement to unlock)
 - Node pool: commit a node to a job up to 1 hour before start; locked once started
 - Earnings credited to balance when a job completes
-- Referral system (direct referrals only) — referrals gate job unlocks and higher node tiers
+- Referral system (direct referrals only) — referrals gate job unlocks
 - Simulated companies and jobs via seed scripts
 
 ## Constraints
 - Phase 1 only: sandbox simulation, test currency, no real payments
 - Companies, jobs, and node "work" are entirely simulated
 - Next.js + Supabase stack, hosted on Vercel
+- Mobile-first: the app is designed and optimized for mobile devices and should feel like a native mobile application

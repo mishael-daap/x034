@@ -6,11 +6,11 @@ Goal: Design the data model and write the Supabase migration to create all datab
 
 ## 2. Auth & Onboarding
 Status: pending
-Goal: Signup, login, and node purchase (tier C) on first entry
+Goal: Signup, login, sign out routes and pages.
 
 ## 3. Node System
 Status: pending
-Goal: Node tiers (C/B/A) with specs, prices, and referral-based unlocks
+Goal: Node tiers (C/B/A) with specs and prices
 
 ## 4. Job Simulation
 Status: pending
