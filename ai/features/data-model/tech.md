@@ -40,8 +40,8 @@ NodeTier {
   name text
   vcpu int
   ram_gb int
-  gpu int
-  bandwidth text
+  gpu int (physical GPU count)
+  bandwidth int (Gbps)
   price numeric
 }
 
@@ -69,7 +69,6 @@ Assignment {
   node uuid → nodes.id
   job uuid → jobs.id
   status text (committed/active/completed)
-  earnings numeric (computed at completion)
 }
 
 Transaction {
@@ -77,19 +76,13 @@ Transaction {
   user uuid → users.id
   type text (earnings/withdrawal)
   amount numeric (signed)
-  reference_id uuid (→ assignment/withdrawal, nullable)
-}
-
-Withdrawal {
-  id
-  user uuid → users.id
-  amount numeric
-  status text (pending/processed/failed)
+  status text (pending/processed — withdrawals only)
+  reference_id uuid (→ assignment, nullable)
 }
 ```
 
 ## Flow
-Migration creates tables in FK order (banks → companies → node_tiers → users → nodes → jobs → assignments → transactions → withdrawals) → indexes/constraints → RLS policies → trigger (referrer immutability) → seed → verify.
+Migration creates tables in FK order (banks → companies → node_tiers → users → nodes → jobs → assignments → transactions) → indexes/constraints → RLS policies → trigger (referrer immutability) → seed → verify.
 
 ## Notes
 - Supabase is a new dependency → docs required at ai/dependencies/supabase/docs.md before implementation

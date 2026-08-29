@@ -9,7 +9,7 @@
 ## System Structure
 - User app — signup, node purchase, marketplace, node pool, balance, referrals
 - API layer — app logic: matching, node pool locking, earnings, referrals
-- Database — users, companies, node tiers, nodes, jobs, assignments, referrals, transactions, withdrawals
+- Database — users, companies, node tiers, nodes, jobs, assignments, referrals, transactions
 - Job simulation — simulated companies/jobs via seed scripts
 
 ## Data Flow
@@ -17,15 +17,14 @@ User → Frontend → API → Database
 Job created (seed script) → matching engine selects eligible nodes → node pool locks at start time → job completes → earnings credited to balance → withdrawal
 
 ## Core Entities
-- User — referral code, balance, tier unlocks
+- User — referral code, balance
 - Company — simulated company posting jobs
 - Job — tier, pay/hr (set by company), duration, start time, required referrals (n) to unlock, company
 - Node — tier, owner, specs (from tier), availability state
-- NodeTier — C/B/A: vCPU, RAM, price (seeded entity)
-- Assignment — node + job lifecycle: committed → active → completed; locks at start; records actual duration + earnings at completion
+- NodeTier — C/B/A: vCPU, RAM, GPU, bandwidth (Gbps), price (seeded entity)
+- Assignment — node + job lifecycle: committed → active → completed; locks at start; duration on job, earnings derived (pay × duration)
 - Referral (tracked via users.referrer) — direct only; qualifies when referee purchases a node
-- Transaction — balance ledger (earnings in, withdrawals out)
-- Withdrawal — amount, status
+- Transaction — balance ledger (type: earnings/withdrawal, signed amount, status for withdrawals)
 
 ## Key Decisions
 - Auth: Supabase Auth

@@ -15,8 +15,8 @@ Design the database schema for the compute marketplace and deliver the Supabase 
 - referral_code unique, generated at signup; referrer immutable once set
 - Constraint: referrer ≠ self
 - One committed/active assignment per node at a time (partial unique index)
-- earnings computed at completion: pay_per_hour × actual_duration_hours
-- Amounts non-negative for jobs/withdrawals; Transaction amount is signed
+- earnings are derived, not stored: pay_per_hour × actual_duration_hours (computed at completion when creating the earnings transaction)
+- Amounts non-negative for jobs; Transaction amount is signed
 - RLS: private tables owner-only; companies, jobs, node_tiers publicly readable
 - Users are never hard-deleted (referral counts depend on them)
 - A job is worked by exactly one node; unselected pool candidates are cancelled at job start

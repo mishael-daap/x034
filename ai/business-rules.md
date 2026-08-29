@@ -1,9 +1,9 @@
 # Business Rules
 
 ## Node Tiers
-- Tier C (Standard): 4 vCPU / 16 GB, $10 equivalent.
-- Tier B (Advanced): 8 vCPU / 32 GB, $25 equivalent.
-- Tier A (Top): 16 vCPU / 64 GB, $50 equivalent.
+- Tier C (Standard): 4 vCPU / 16 GB / 1 GPU / 1 Gbps, $10 equivalent.
+- Tier B (Advanced): 8 vCPU / 32 GB / 2 GPU / 2 Gbps, $50 equivalent.
+- Tier A (Top): 16 vCPU / 64 GB / 4 GPU / 4 Gbps, $100 equivalent.
 - Any tier can be purchased by paying its price — no referral requirement to unlock tiers.
 - A user must purchase a node to count as a referral for someone else.
 - A user can own nodes of multiple tiers.
