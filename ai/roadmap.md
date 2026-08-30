@@ -5,7 +5,7 @@ Status: in development
 Goal: Design the data model and write the Supabase migration to create all database tables
 
 ## 2. Auth & Onboarding
-Status: pending
+Status: completed
 Goal: Signup, login, sign out routes and pages.
 
 ## 3. Node System
