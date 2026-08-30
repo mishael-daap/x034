@@ -25,10 +25,18 @@ export function HomeClient() {
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : { user: null }))
-      .then((d) => setUser(d.user ?? null))
-      .catch(() => setUser(null));
+      .then((d) => {
+        if (!ignore) setUser(d.user ?? null);
+      })
+      .catch(() => {
+        if (!ignore) setUser(null);
+      });
+    return () => {
+      ignore = true; // drop stale responses (StrictMode double-effect)
+    };
   }, []);
 
   async function handleSignOut() {
