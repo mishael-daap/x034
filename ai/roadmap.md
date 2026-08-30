@@ -1,37 +1,19 @@
 # Roadmap
 
+Agile, MVP-first: each item is a shippable increment; build the core loop to v1 as fast as possible, then iterate to improve.
+
 ## 1. Data Model & Migration
-Status: in development
-Goal: Design the data model and write the Supabase migration to create all database tables
+Status: completed
+Goal: Schema + Supabase migration for all core tables and the user_balances view
 
 ## 2. Auth & Onboarding
 Status: completed
-Goal: Signup, login, sign out routes and pages.
+Goal: Signup, login, profile with referral code, and node purchase (any tier)
 
-## 3. Node System
+## 3. Marketplace MVP (core earning loop)
 Status: pending
-Goal: Node tiers (C/B/A) with specs and prices
+Goal: Seeded companies and jobs, browse jobs, commit a node to a job, credit earnings on completion, show balance
 
-## 4. Job Simulation
+## 4. Referrals & Withdrawals
 Status: pending
-Goal: Seed scripts to create simulated companies and jobs
-
-## 5. Marketplace
-Status: pending
-Goal: Browse available jobs with pay per hour, duration, start time, and referral requirement
-
-## 6. Matching & Node Pool
-Status: pending
-Goal: Commit a node to a job up to 1 hour before start; lock at start
-
-## 7. Earnings & Balance
-Status: pending
-Goal: Credit earnings on job completion and show transaction history
-
-## 8. Referral System
-Status: pending
-Goal: Referral codes, direct referral tracking, tier and job unlocks
-
-## 9. Withdrawals
-Status: pending
-Goal: Withdrawal flow using test currency
+Goal: Referral tracking with referral-gated job unlocks, and the withdrawal flow using test currency
