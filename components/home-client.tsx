@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Dashboard } from "@/components/dashboard/dashboard-client";
 
 type User = {
   id: string;
@@ -22,7 +16,6 @@ type User = {
 export function HomeClient() {
   const router = useRouter();
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -35,17 +28,9 @@ export function HomeClient() {
         if (!ignore) setUser(null);
       });
     return () => {
-      ignore = true; // drop stale responses (StrictMode double-effect)
+      ignore = true;
     };
   }, []);
-
-  async function handleSignOut() {
-    setSigningOut(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    setSigningOut(false);
-    router.refresh();
-  }
 
   if (user === undefined) {
     return (
@@ -68,11 +53,7 @@ export function HomeClient() {
           <Button onClick={() => router.push("/signup")} className="h-10 w-full">
             Create account
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push("/login")}
-            className="h-10 w-full"
-          >
+          <Button variant="outline" onClick={() => router.push("/login")} className="h-10 w-full">
             Sign in
           </Button>
         </div>
@@ -80,26 +61,5 @@ export function HomeClient() {
     );
   }
 
-  return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Signed in as {user.name}</CardTitle>
-          <CardDescription>
-            {user.email ?? user.phone} · Referral code: {user.referral_code}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="w-full"
-          >
-            {signingOut ? "Signing out…" : "Sign out"}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <Dashboard user={user} />;
 }

@@ -12,7 +12,7 @@ Goal: Signup, login, profile with referral code, and node purchase (any tier)
 
 ## 3. Marketplace MVP (core earning loop)
 Status: pending
-Goal: Seeded companies and jobs, browse jobs, commit a node to a job, credit earnings on completion, show balance
+Goal: Seeded companies and jobs, browse jobs, commit nodes to a job pool, credit earnings on completion, show balance
 
 ## 4. Referrals & Withdrawals
 Status: pending
