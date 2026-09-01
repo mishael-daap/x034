@@ -27,7 +27,7 @@ type AssignmentRow = {
   status: string;
   job: {
     id: string;
-    pay_per_hour: number;
+    total_payout: number;
     duration_hours: number;
     actual_duration_hours: number | null;
     starts_at: string;
@@ -95,7 +95,9 @@ export async function GET() {
         job_id: assignment.job.id,
         company: assignment.job.company?.name ?? "Unknown",
         status: deriveJobStatus(assignment.job.starts_at, dur, now),
-        estimated_earnings: Number((assignment.job.pay_per_hour * dur).toFixed(2)),
+        estimated_earnings: Number(
+          ((assignment.job.total_payout * dur) / assignment.job.duration_hours).toFixed(2)
+        ),
       };
     }
 

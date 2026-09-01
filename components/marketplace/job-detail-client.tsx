@@ -14,7 +14,7 @@ type JobDetail = {
   company: string;
   tier: string;
   tier_name: string;
-  pay_per_hour: number;
+  total_payout: number;
   duration_hours: number;
   actual_duration_hours: number | null;
   starts_at: string;
@@ -64,8 +64,22 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
   }, [jobId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let ignore = false;
+    fetch(`/api/marketplace/${jobId}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("bad"))))
+      .then((d) => {
+        if (!ignore) {
+          setData(d);
+          setError(null);
+        }
+      })
+      .catch(() => {
+        if (!ignore) setError("Could not load this job.");
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [jobId]);
 
   // Lazy lock: once the job has started and isn't locked yet, materialize earnings.
   useEffect(() => {
@@ -120,10 +134,10 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
         </CardHeader>
         <CardContent className="grid gap-1.5 text-sm">
           <Row k="Status" v={<Badge variant="outline">{STATUS_LABEL[job.status]}</Badge>} />
-          <Row k="Pay / hour" v={job.pay_per_hour.toFixed(2)} />
+          <Row k="Total pool" v={job.total_payout.toFixed(2)} />
           <Row k="Total work" v={`${job.duration_hours}h (one node)`} />
           <Row k="Est. duration" v={`${job.estimated_duration.toFixed(2)}h`} />
-          <Row k="Est. earnings" v={`≈ ${job.estimated_earnings.toFixed(2)}`} />
+          <Row k="Est. per node" v={`≈ ${job.estimated_earnings.toFixed(2)}`} />
           <Row k="Starts" v={fmt(job.starts_at)} />
           <Row k="Pool" v={`${job.pool_count}/${job.max_pool} nodes`} />
           {job.required_referrals > 0 && (

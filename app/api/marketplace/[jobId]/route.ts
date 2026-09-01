@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import {
   deriveJobStatus,
   estimateDuration,
+  estimateEarnings,
   maxPoolSize,
   nodeQualifies,
 } from "@/lib/jobs";
@@ -16,7 +17,7 @@ function json(status: number, body: unknown) {
 
 type JobRow = {
   id: string;
-  pay_per_hour: number;
+  total_payout: number;
   duration_hours: number;
   actual_duration_hours: number | null;
   starts_at: string;
@@ -58,15 +59,15 @@ export async function GET(_req: Request, { params }: Params) {
     company: job.company?.name ?? "Unknown",
     tier: job.min_tier?.code ?? "",
     tier_name: job.min_tier?.name ?? "",
-    pay_per_hour: job.pay_per_hour,
+    total_payout: job.total_payout,
     duration_hours: job.duration_hours,
     actual_duration_hours: job.actual_duration_hours,
     starts_at: job.starts_at,
     required_referrals: job.required_referrals,
     pool_count: poolCount,
-    max_pool: maxPoolSize(job.pay_per_hour, job.duration_hours),
+    max_pool: maxPoolSize(job.total_payout),
     estimated_duration: Number(realizedDuration.toFixed(2)),
-    estimated_earnings: Number((job.pay_per_hour * realizedDuration).toFixed(2)),
+    estimated_earnings: Number(estimateEarnings(job.total_payout, poolCount).toFixed(2)),
     status: deriveJobStatus(job.starts_at, realizedDuration, now),
   };
 

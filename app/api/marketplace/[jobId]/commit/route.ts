@@ -13,8 +13,7 @@ function json(status: number, body: unknown) {
 type JobRow = {
   id: string;
   starts_at: string;
-  pay_per_hour: number;
-  duration_hours: number;
+  total_payout: number;
   min_tier: { code: string } | null;
 };
 
@@ -40,7 +39,7 @@ export async function POST(req: Request, { params }: Params) {
   const now = Date.now();
 
   const jobRes = await supabaseFetch<JobRow[]>(
-    `/rest/v1/jobs?select=id,starts_at,pay_per_hour,duration_hours,min_tier:node_tiers(code)&id=eq.${jobId}&limit=1`
+    `/rest/v1/jobs?select=id,starts_at,total_payout,min_tier:node_tiers(code)&id=eq.${jobId}&limit=1`
   );
   const job = jobRes.data?.[0];
   if (!job) return json(404, { error: "Job not found" });
@@ -89,7 +88,7 @@ export async function POST(req: Request, { params }: Params) {
   const poolCount = (poolRes.data ?? []).filter(
     (a) => a.status === "committed" || a.status === "active"
   ).length;
-  if (poolCount >= maxPoolSize(job.pay_per_hour, job.duration_hours)) {
+  if (poolCount >= maxPoolSize(job.total_payout)) {
     return json(409, { error: "Job pool is at capacity" });
   }
 

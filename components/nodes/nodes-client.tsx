@@ -64,7 +64,7 @@ export function NodesClient() {
 
       {nodes.length === 0 ? (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground">You don't own any nodes yet.</p>
+          <p className="text-sm text-muted-foreground">You don&apos;t own any nodes yet.</p>
           <Link href="/nodes/purchase">
             <Button className="h-10 w-full">Purchase a node</Button>
           </Link>
