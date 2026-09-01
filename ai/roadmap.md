@@ -14,6 +14,10 @@ Goal: Signup, login, profile with referral code, and node purchase (any tier)
 Status: pending
 Goal: Seeded companies and jobs, browse jobs, commit nodes to a job pool, credit earnings on completion, show balance
 
+## 3.1 Pot Model (incremental)
+Status: pending
+Goal: Replace `jobs.pay_per_hour` with a company-set `total_payout` pot (derived per-node earnings, pool-based capacity, `total_payout ≥ platform floor`) so the schema matches business rules
+
 ## 4. Referrals & Withdrawals
 Status: pending
 Goal: Referral tracking with referral-gated job unlocks, and the withdrawal flow using test currency

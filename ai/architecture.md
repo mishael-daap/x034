@@ -29,9 +29,9 @@ Job created (seed script) → matching engine admits eligible nodes to the pool 
 ## Key Decisions
 - Auth: Supabase Auth
 - Jobs and node tiers simulated/seeded in Phase 1; no real compute
-- Job pay rates are set by the company (client) when creating a job
+- Job total payouts (pots) are set by the company (client) when creating a job; per-node earnings derive from the pot and pool size at lock
 - Matching: node tier must meet or exceed job tier; jobs also have an independent referral requirement (n qualifying referrals) to unlock
-- Earnings: pay rate × actual duration (duration_hours ÷ pool size), regardless of node tier (no bonus for higher-tier nodes); a job's total pot is constant
+- Earnings: each pool node earns `total_payout ÷ pool size` at lock, regardless of node tier (no bonus for higher-tier nodes); a job's total payout is constant (pot)
 - Node pool: many nodes per job; admits until capacity (platform earnings floor) or 1 hour before start; reopens on freed slots; locked at start
 - Referrals: direct only, tracked by referral code; gate access to jobs with a referral requirement (not tier purchases)
 - Money: test currency only in Phase 1; payments are a Phase 2 decision

@@ -13,9 +13,9 @@ Individuals with compute capacity have no easy way to monetize it, and companies
 ## Core Features
 - Signup and node purchase (tier C available on signup)
 - Tiered node system (C/B/A, purchasable by anyone; rules in business-rules.md)
-- Compute marketplace with simulated jobs (pay per hour, duration, start time, referral requirement to unlock)
+- Compute marketplace with simulated jobs (total payout pot, duration, start time, referral requirement to unlock)
 - Node pool: many nodes can commit to a job's pool; accepts nodes until capacity or 1 hour before start; locked once started
-- Earnings credited to balance when a job completes (pay rate × actual duration, split pot)
+- Earnings credited to balance when a job completes (total payout split across the pool)
 - Referral system (direct referrals only) — referrals gate job unlocks
 - Simulated companies and jobs via seed scripts
 
