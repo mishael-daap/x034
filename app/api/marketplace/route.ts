@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
-import { deriveJobStatus, estimateDuration, maxPoolSize } from "@/lib/jobs";
+import { deriveJobStatus, estimateDuration, estimateEarnings, maxPoolSize } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ function json(status: number, body: unknown) {
 
 type JobRow = {
   id: string;
-  pay_per_hour: number;
+  total_payout: number;
   duration_hours: number;
   actual_duration_hours: number | null;
   starts_at: string;
@@ -50,14 +50,14 @@ export async function GET() {
         company: j.company?.name ?? "Unknown",
         tier: j.min_tier?.code ?? "",
         tier_name: j.min_tier?.name ?? "",
-        pay_per_hour: j.pay_per_hour,
+        total_payout: j.total_payout,
         duration_hours: j.duration_hours,
         starts_at: j.starts_at,
         required_referrals: j.required_referrals,
         pool_count: poolCount,
-        max_pool: maxPoolSize(j.pay_per_hour, j.duration_hours),
+        max_pool: maxPoolSize(j.total_payout),
         estimated_duration: estDuration,
-        estimated_earnings: Number((j.pay_per_hour * estDuration).toFixed(2)),
+        estimated_earnings: Number(estimateEarnings(j.total_payout, poolCount).toFixed(2)),
         status: deriveJobStatus(j.starts_at, j.duration_hours, now),
       };
     });

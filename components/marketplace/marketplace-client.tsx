@@ -10,7 +10,7 @@ type Job = {
   company: string;
   tier: string;
   tier_name: string;
-  pay_per_hour: number;
+  total_payout: number;
   duration_hours: number;
   starts_at: string;
   required_referrals: number;
@@ -80,12 +80,12 @@ export function MarketplaceClient() {
               </CardHeader>
               <CardContent className="grid gap-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Earn (est.)</span>
+                  <span className="text-muted-foreground">Est. per node</span>
                   <span className="font-medium">≈ {job.estimated_earnings.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pay / hour</span>
-                  <span>{job.pay_per_hour.toFixed(2)}</span>
+                  <span className="text-muted-foreground">Total pool</span>
+                  <span>{job.total_payout.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Starts</span>

@@ -5,7 +5,7 @@ type JobRow = {
   starts_at: string;
   duration_hours: number;
   actual_duration_hours: number | null;
-  pay_per_hour: number;
+  total_payout: number;
 };
 
 type AssignmentRow = { id: string; node: { owner: string } | null };
@@ -30,7 +30,7 @@ export async function finalizeJobLock(jobId: string): Promise<LockResult> {
   const now = Date.now();
 
   const jobRes = await supabaseFetch<JobRow[]>(
-    `/rest/v1/jobs?select=id,starts_at,duration_hours,actual_duration_hours,pay_per_hour&id=eq.${jobId}&limit=1`
+    `/rest/v1/jobs?select=id,starts_at,duration_hours,actual_duration_hours,total_payout&id=eq.${jobId}&limit=1`
   );
   const job = jobRes.data?.[0];
   if (!job) return { locked: false, error: "Job not found" };
@@ -49,7 +49,8 @@ export async function finalizeJobLock(jobId: string): Promise<LockResult> {
   const n = assignments.length;
 
   const actualDuration = n > 0 ? job.duration_hours / n : job.duration_hours;
-  const earningsAmount = Number((job.pay_per_hour * actualDuration).toFixed(2));
+  // Pot split: each pool node earns total_payout ÷ pool size (n=0 → full pot, no transactions).
+  const earningsAmount = Number((job.total_payout / Math.max(n, 1)).toFixed(2));
 
   const jobUpd = await supabaseFetch(`/rest/v1/jobs?id=eq.${jobId}`, {
     method: "PATCH",

@@ -10,9 +10,17 @@ export function nodeQualifies(nodeTierCode: string, jobTierCode: string): boolea
   return (TIER_RANK[nodeTierCode] ?? 0) >= (TIER_RANK[jobTierCode] ?? 0);
 }
 
-/** Max pool size a job can accept before per-node earnings drop below the floor. */
-export function maxPoolSize(payPerHour: number, durationHours: number): number {
-  return Math.max(1, Math.floor((payPerHour * durationHours) / PLATFORM_EARNINGS_FLOOR));
+/**
+ * Max pool size a job can accept before per-node earnings drop below the floor.
+ * pot = total_payout; n_max = floor(pot ÷ platform floor).
+ */
+export function maxPoolSize(totalPayout: number): number {
+  return Math.max(1, Math.floor(totalPayout / PLATFORM_EARNINGS_FLOOR));
+}
+
+/** Estimated (or realized) per-node earnings: the pot split across the pool. */
+export function estimateEarnings(totalPayout: number, poolSize: number): number {
+  return totalPayout / Math.max(poolSize, 1);
 }
 
 /** Estimated (or realized) duration given the current pool size. */
