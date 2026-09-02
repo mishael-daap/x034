@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sustaining Rate — Unit Acquisition Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0D1210;
+    --panel: #161D1A;
+    --panel-raised: #1C2420;
+    --border: #2A3530;
+    --text: #E7E3D8;
+    --muted: #8B978F;
+    --amber: #E8A33D;
+    --teal: #4FD1C5;
+    --danger: #E2574C;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    padding: 48px 24px 80px;
+  }
+  .wrap{ max-width: 980px; margin: 0 auto; }
+
+  h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .sub{
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 40px;
+    max-width: 60ch;
+    line-height: 1.5;
+  }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 28px;
+    margin-bottom: 28px;
+  }
+  .panel h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0 0 20px;
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px 20px;
+  }
+  @media (max-width: 720px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
+
+  label{
+    display:block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  label .sym{ color: var(--amber); }
+  input[type=number]{
+    width:100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 14px;
+    padding: 9px 10px;
+    border-radius: 4px;
+  }
+  input[type=number]:focus{
+    outline: none;
+    border-color: var(--amber);
+  }
+
+  button{
+    margin-top: 24px;
+    background: var(--amber);
+    color: #17130A;
+    border: none;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 12px 22px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:hover{ background: #f3b453; }
+
+  .status{
+    font-size: 13px;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .status.error{ color: var(--danger); }
+  .status.ok{ color: var(--teal); }
+
+  .stat-row{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 720px){ .stat-row{ grid-template-columns: repeat(2, 1fr); } }
+  .stat{
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+  }
+  .stat .n{
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--amber);
+  }
+  .stat .l{
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .table-scroll{
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  table{
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12.5px;
+    min-width: 920px;
+  }
+  th, td{
+    padding: 9px 12px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  th{
+    text-align: right;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: none;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+  }
+  th:first-child, td:first-child{ text-align: left; }
+  tbody tr:nth-child(odd){ background: rgba(255,255,255,0.015); }
+  tbody tr:hover{ background: rgba(232,163,61,0.06); }
+  .table-body-wrap{ max-height: 480px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Sustaining Rate Simulator</h1>
+  <p class="sub">
+    Each unit generates a one-time payout of energy on acquisition. Some of
+    it is banked as score, some paid out as commission to the recruiter,
+    and the rest funds upkeep for every active unit. This runs the
+    day-by-day minimum recruitment needed to stay afloat.
+  </p>
+
+  <div class="panel">
+    <h2>Inputs</h2>
+    <div class="grid">
+      <div>
+        <label>Active units <span class="sym">N</span></label>
+        <input type="number" id="activeUnits" value="133" step="1">
+      </div>
+      <div>
+        <label>Energy per unit <span class="sym">E</span></label>
+        <input type="number" id="energyPerUnit" value="10" step="0.1">
+      </div>
+      <div>
+        <label>Score % <span class="sym">p</span></label>
+        <input type="number" id="scorePct" value="0.20" step="0.01" min="0" max="1">
+      </div>
+      <div>
+        <label>Commission % <span class="sym">c</span></label>
+        <input type="number" id="commissionPct" value="0.30" step="0.01" min="0" max="1">
+      </div>
+      <div>
+        <label>Upkeep % <span class="sym">u</span></label>
+        <input type="number" id="upkeepPct" value="0.05" step="0.01" min="0" max="1">
+      </div>
+      <div>
+        <label>Target score</label>
+        <input type="number" id="targetScore" value="5000" step="100">
+      </div>
+    </div>
+    <button onclick="runSimulation()">Run simulation</button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="panel" id="summaryPanel" style="display:none;">
+    <h2>Summary</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="n" id="sumDays">—</div><div class="l">days to target</div></div>
+      <div class="stat"><div class="n" id="sumUnits">—</div><div class="l">total units, final</div></div>
+      <div class="stat"><div class="n" id="sumScore">—</div><div class="l">cumulative score, final</div></div>
+      <div class="stat"><div class="n" id="sumEnergy">—</div><div class="l">cumulative energy, final</div></div>
+    </div>
+  </div>
+
+  <div class="panel" id="tablePanel" style="display:none;">
+    <h2>Daily record</h2>
+    <div class="table-scroll">
+      <div class="table-body-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Total units</th>
+              <th>Recruited</th>
+              <th>Energy gen.</th>
+              <th>Commission</th>
+              <th>Net surplus</th>
+              <th>Upkeep</th>
+              <th>Score gained</th>
+              <th>Cum. score</th>
+              <th>Cum. energy</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function fmt(n){
+  return n.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function minimumUnitsToAcquire(activeUnits, p, c, u){
+  const netSurplusFraction = 1 - p - c;
+  const denominator = netSurplusFraction - u;
+  if (denominator <= 0) return null; // not sustainable
+  return (activeUnits * u) / denominator;
+}
+
+function runSimulation(){
+  const N0 = parseFloat(document.getElementById('activeUnits').value);
+  const E  = parseFloat(document.getElementById('energyPerUnit').value);
+  const p  = parseFloat(document.getElementById('scorePct').value);
+  const c  = parseFloat(document.getElementById('commissionPct').value);
+  const u  = parseFloat(document.getElementById('upkeepPct').value);
+  const targetScore = parseFloat(document.getElementById('targetScore').value);
+  const MAX_DAYS = 10000;
+
+  const statusEl = document.getElementById('status');
+  const summaryPanel = document.getElementById('summaryPanel');
+  const tablePanel = document.getElementById('tablePanel');
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  const netSurplusFraction = 1 - p - c;
+  if (netSurplusFraction - u <= 0){
+    statusEl.className = 'status error';
+    statusEl.textContent =
+      'Not sustainable: (1 − score% − commission%) must exceed upkeep%. ' +
+      'No acquisition rate can keep this system afloat with these inputs.';
+    summaryPanel.style.display = 'none';
+    tablePanel.style.display = 'none';
+    return;
+  }
+
+  let activeUnits = N0;
+  let cumulativeScore = 0;
+  let cumulativeEnergy = 0;
+  let day = 0;
+  const rows = [];
+
+  while (cumulativeScore < targetScore && day < MAX_DAYS){
+    day++;
+    const unitsToRecruit = minimumUnitsToAcquire(activeUnits, p, c, u);
+
+    const energyGeneratedToday = unitsToRecruit * E;
+    const commissionToday = energyGeneratedToday * c;
+    const scoreGainedToday = energyGeneratedToday * p;
+    const netSurplusToday = energyGeneratedToday * netSurplusFraction;
+
+    const totalUnitsToday = activeUnits + unitsToRecruit;
+    const upkeepToday = totalUnitsToday * u * E;
+
+    cumulativeScore += scoreGainedToday;
+    cumulativeEnergy += energyGeneratedToday;
+    activeUnits = totalUnitsToday;
+
+    rows.push([day, totalUnitsToday, unitsToRecruit, energyGeneratedToday,
+               commissionToday, netSurplusToday, upkeepToday,
+               scoreGainedToday, cumulativeScore, cumulativeEnergy]);
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r[0]}</td>` + r.slice(1).map(v => `<td>${fmt(v)}</td>`).join('');
+    tbody.appendChild(tr);
+  });
+
+  if (cumulativeScore >= targetScore){
+    statusEl.className = 'status ok';
+    statusEl.textContent = `Target score of ${targetScore.toLocaleString()} reached on day ${day}.`;
+  } else {
+    statusEl.className = 'status error';
+    statusEl.textContent = `Stopped after ${MAX_DAYS.toLocaleString()} days without reaching target score.`;
+  }
+
+  document.getElementById('sumDays').textContent = day.toLocaleString();
+  document.getElementById('sumUnits').textContent = fmt(activeUnits);
+  document.getElementById('sumScore').textContent = fmt(cumulativeScore);
+  document.getElementById('sumEnergy').textContent = fmt(cumulativeEnergy);
+
+  summaryPanel.style.display = 'block';
+  tablePanel.style.display = 'block';
+}
+
+runSimulation();
+</script>
+</body>
+</html>
