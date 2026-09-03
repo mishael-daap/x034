@@ -6,3 +6,12 @@ export const PLATFORM_EARNINGS_FLOOR = 1.0;
 
 // Nodes can't join a job's pool within this many hours before it starts.
 export const COMMIT_WINDOW_HOURS = 1;
+
+// Revenue & commission model: the platform is a seeded users row (migration 0006)
+// and every node purchase (price P) is split across the ledger:
+//   referrer `referral` +0.3P (only when the buyer has a referrer)
+//   platform `node_sale` +0.5P and `platform_earnings` +0.2P (+0.5P with no referrer)
+export const PLATFORM_USER_ID = "00000000-0000-4000-8000-000000000001";
+export const NODE_SALE_SHARE = 0.5;
+export const PLATFORM_CUT_SHARE = 0.2;
+export const REFERRAL_COMMISSION_SHARE = 0.3;

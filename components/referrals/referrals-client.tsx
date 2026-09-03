@@ -15,15 +15,29 @@ type Referral = {
   referees: { id: string; name: string; created_at: string; qualifying: boolean }[];
 };
 
+type Commission = {
+  id: string;
+  amount: number;
+  created_at: string;
+  referee: string | null;
+  tier: string | null;
+};
+
 export function ReferralsClient() {
   const router = useRouter();
   const [referral, setReferral] = useState<Referral | null>(null);
+  const [commissions, setCommissions] = useState<Commission[] | null>(null);
+  const [commissionEarnings, setCommissionEarnings] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/referrals/me")
       .then((r) => (r.ok ? r.json() : { referral: null }))
-      .then((d) => setReferral(d.referral))
+      .then((d) => {
+        setReferral(d.referral ?? null);
+        setCommissions(d.commissions ?? null);
+        setCommissionEarnings(d.commission_earnings ?? null);
+      })
       .catch(() => setReferral(null));
   }, []);
 
@@ -86,7 +100,7 @@ export function ReferralsClient() {
           <h2 className="mt-6 text-sm font-medium text-muted-foreground">Referees</h2>
           {referral.referees.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              No one has signed up with your code yet. Share it to start earning unlocks.
+              No one has signed up with your code yet. Share it to earn 30% on every node they buy.
             </p>
           ) : (
             <ul className="mt-2 grid gap-2">
@@ -101,6 +115,41 @@ export function ReferralsClient() {
                   <Badge variant={r.qualifying ? "default" : "outline"}>
                     {r.qualifying ? "Qualifying" : "No node yet"}
                   </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h2 className="mt-6 text-sm font-medium text-muted-foreground">Commission earnings</h2>
+          <div className="mt-2 rounded-lg border p-3">
+            <p className="text-xl font-semibold">
+              {commissionEarnings == null ? "—" : `$${Number(commissionEarnings).toFixed(2)}`}
+            </p>
+            <p className="text-xs text-muted-foreground">30% of every node your referees buy</p>
+          </div>
+          {commissions == null ? (
+            <div className="mt-2 grid gap-2">
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : commissions.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">No commissions yet.</p>
+          ) : (
+            <ul className="mt-2 grid gap-2">
+              {commissions.map((c) => (
+                <li key={c.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {c.referee
+                        ? `From ${c.referee}'s ${c.tier ?? "node"} purchase`
+                        : "Referral commission"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(c.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-emerald-600">
+                    +${Number(c.amount).toFixed(2)}
+                  </p>
                 </li>
               ))}
             </ul>

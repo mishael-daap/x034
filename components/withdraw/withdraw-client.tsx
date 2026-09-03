@@ -75,7 +75,9 @@ export function WithdrawClient() {
   const typeLabel: Record<string, string> = {
     earnings: "Earnings",
     purchase: "Purchase",
-    deposit: "Deposit",
+    referral: "Referral commission",
+    platform_earnings: "Platform earnings",
+    node_sale: "Node sale",
     withdrawal: "Withdrawal",
   };
 
