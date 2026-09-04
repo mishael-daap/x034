@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, Loader2, Send } from "lucide-react";
+import { ArrowLeft, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -91,10 +91,28 @@ export function MeClient() {
       return;
     }
     const d = await res.json().catch(() => null);
-    if (d?.user) setProfile(d.user);
+    if (d?.user) {
+      // Re-sync fields from the server so dirty tracking settles (e.g. email is lowercased).
+      const u = d.user;
+      setProfile(u);
+      setName(u.name ?? "");
+      setEmail(u.email ?? "");
+      setPhone(u.phone ?? "");
+      setBankId(u.bank?.id ?? "");
+      setAccountNumber(u.account_number ?? "");
+    }
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 2500);
   }
+
+  // Only show Save while something actually changed vs the loaded profile.
+  const dirty = profile
+    ? name !== profile.name ||
+      email !== (profile.email ?? "") ||
+      phone !== (profile.phone ?? "") ||
+      bankId !== (profile.bank?.id ?? "") ||
+      accountNumber !== (profile.account_number ?? "")
+    : false;
 
   if (!profile) {
     return (
@@ -224,15 +242,16 @@ export function MeClient() {
           </CardContent>
         </Card>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={saving} className="h-10 w-full">
-          {saving ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : saved ? (
-            <Check className="size-4" />
-          ) : null}
-          {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
-        </Button>
+        {error && dirty && <p className="text-sm text-destructive">{error}</p>}
+        {dirty && (
+          <Button type="submit" disabled={saving} className="h-10 w-full">
+            {saving && <Loader2 className="size-4 animate-spin" />}
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
+        )}
+        {saved && (
+          <p className="text-center text-sm text-emerald-600">Changes saved.</p>
+        )}
       </form>
     </div>
   );
