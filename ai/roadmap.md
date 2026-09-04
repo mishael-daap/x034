@@ -49,7 +49,7 @@ Scope:
 - E2E (test mode): card purchase books node + reconciling rows; duplicate/retried callback does not double-credit; legacy phone-only accounts get a clear error at init
 
 ## 5.1 Admin-Approved Withdrawals (incremental)
-Status: pending
+Status: completed
 Goal: Split withdrawal *requests* from *executed* money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — a `role = 'admin'` user who signs in through the normal login; admin UI is roadmap 5.2) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop at approval time and users never process their own withdrawals (the user-facing "Process" button is removed). Balance is re-checked at approval and the request is declined if it's no longer covered. The platform user becomes the admin account (real credentials, `role = 'admin'`), and the decision endpoint is admin-gated from the start.
 
 Scope:
