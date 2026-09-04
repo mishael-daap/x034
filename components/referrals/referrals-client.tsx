@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Copy, Users } from "lucide-react";
+import { ArrowLeft, Check, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type Referral = {
@@ -15,18 +13,12 @@ type Referral = {
   referees: { id: string; name: string; created_at: string; qualifying: boolean }[];
 };
 
-type Commission = {
-  id: string;
-  amount: number;
-  created_at: string;
-  referee: string | null;
-  tier: string | null;
-};
+const money = (n: number) =>
+  `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function ReferralsClient() {
   const router = useRouter();
   const [referral, setReferral] = useState<Referral | null>(null);
-  const [commissions, setCommissions] = useState<Commission[] | null>(null);
   const [commissionEarnings, setCommissionEarnings] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -35,7 +27,6 @@ export function ReferralsClient() {
       .then((r) => (r.ok ? r.json() : { referral: null }))
       .then((d) => {
         setReferral(d.referral ?? null);
-        setCommissions(d.commissions ?? null);
         setCommissionEarnings(d.commission_earnings ?? null);
       })
       .catch(() => setReferral(null));
@@ -48,108 +39,101 @@ export function ReferralsClient() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // ignore
+      // clipboard unavailable — ignore
     }
   }
 
   return (
     <div className="mx-auto w-full max-w-md p-6">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
-        <ArrowLeft />
-        Back
-      </Button>
+      {/* Back — icon only (router.back since referrals is reachable from several screens) */}
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label="Go back"
+        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <ArrowLeft className="size-5" />
+      </button>
 
       {!referral ? (
-        <div className="mt-4 grid gap-3">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-16 w-full" />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
+          <Skeleton className="h-28 w-full rounded-xl" />
         </div>
       ) : (
         <>
-          <Card className="mt-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="size-4" />
-                Referrals
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Your code</p>
-                  <p className="font-mono text-sm font-medium">{referral.referral_code}</p>
-                </div>
-                <Button variant="outline" size="sm" onClick={copyCode}>
-                  <Copy />
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xl font-semibold">{referral.total_referees}</p>
-                  <p className="text-xs text-muted-foreground">Total referees</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xl font-semibold">{referral.qualifying_count}</p>
-                  <p className="text-xs text-muted-foreground">Qualifying (own a node)</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Stat tiles: total / qualifying / commission / referral code (tap to copy) */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="flex min-h-28 flex-col rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p className="text-xs text-muted-foreground">Total referees</p>
+              <p className="mt-auto pt-3 text-2xl font-semibold tracking-tight">
+                {referral.total_referees}
+              </p>
+            </div>
+            <div className="flex min-h-28 flex-col rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p className="text-xs text-muted-foreground">Qualifying referees</p>
+              <p className="mt-auto pt-3 text-2xl font-semibold tracking-tight">
+                {referral.qualifying_count}
+              </p>
+            </div>
+            <div className="flex min-h-28 flex-col rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+              <p className="text-xs text-muted-foreground">Commission earned</p>
+              <p className="mt-auto pt-3 font-[var(--font-roboto-mono)] text-2xl font-bold tabular-nums tracking-tight">
+                {commissionEarnings == null ? "—" : money(commissionEarnings)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={copyCode}
+              aria-label={`Copy referral code ${referral.referral_code}`}
+              className="flex min-h-28 cursor-pointer flex-col rounded-xl bg-card p-4 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
+              <p
+                className={
+                  copied
+                    ? "text-xs font-medium text-emerald-500"
+                    : "text-xs text-muted-foreground"
+                }
+              >
+                {copied ? "Copied!" : "Referral code"}
+              </p>
+              <span className="mt-auto flex items-center justify-between gap-2 pt-3">
+                <span className="truncate font-[var(--font-roboto-mono)] text-xl font-bold tabular-nums tracking-tight">
+                  {referral.referral_code}
+                </span>
+                {copied ? (
+                  <Check className="size-4 shrink-0 text-emerald-500" />
+                ) : (
+                  <Copy className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </span>
+            </button>
+          </div>
 
-          <h2 className="mt-6 text-sm font-medium text-muted-foreground">Referees</h2>
+          {/* Referees list */}
+          <h2 className="mt-7 text-sm font-medium text-muted-foreground">Referees</h2>
           {referral.referees.length === 0 ? (
             <p className="mt-2 text-sm text-muted-foreground">
               No one has signed up with your code yet. Share it to earn 30% on every node they buy.
             </p>
           ) : (
-            <ul className="mt-2 grid gap-2">
+            <ul className="mt-2 max-h-[170px] divide-y divide-border/70 overflow-y-auto">
               {referral.referees.map((r) => (
-                <li key={r.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{r.name}</p>
+                <li key={r.id} className="flex h-14 items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.name}</p>
                     <p className="text-xs text-muted-foreground">
                       Joined {new Date(r.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <Badge variant={r.qualifying ? "default" : "outline"}>
+                  <Badge
+                    variant={r.qualifying ? "default" : "outline"}
+                    className="shrink-0"
+                  >
                     {r.qualifying ? "Qualifying" : "No node yet"}
                   </Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <h2 className="mt-6 text-sm font-medium text-muted-foreground">Commission earnings</h2>
-          <div className="mt-2 rounded-lg border p-3">
-            <p className="text-xl font-semibold">
-              {commissionEarnings == null ? "—" : `$${Number(commissionEarnings).toFixed(2)}`}
-            </p>
-            <p className="text-xs text-muted-foreground">30% of every node your referees buy</p>
-          </div>
-          {commissions == null ? (
-            <div className="mt-2 grid gap-2">
-              <Skeleton className="h-12 w-full" />
-            </div>
-          ) : commissions.length === 0 ? (
-            <p className="mt-2 text-sm text-muted-foreground">No commissions yet.</p>
-          ) : (
-            <ul className="mt-2 grid gap-2">
-              {commissions.map((c) => (
-                <li key={c.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">
-                      {c.referee
-                        ? `From ${c.referee}'s ${c.tier ?? "node"} purchase`
-                        : "Referral commission"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(c.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <p className="text-sm font-medium text-emerald-600">
-                    +${Number(c.amount).toFixed(2)}
-                  </p>
                 </li>
               ))}
             </ul>
