@@ -22,7 +22,10 @@ export function HomeClient() {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : { user: null }))
       .then((d) => {
-        if (!ignore) setUser(d.user ?? null);
+        if (!ignore) {
+          document.title = d.user ? "Dashboard" : "Compute Marketplace";
+          setUser(d.user ?? null);
+        }
       })
       .catch(() => {
         if (!ignore) setUser(null);
