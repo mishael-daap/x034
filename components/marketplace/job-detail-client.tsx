@@ -259,15 +259,15 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
         </div>
         <div className="shrink-0 text-right">
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Payout pot
+            Per node
           </p>
           <p
             className={cn(
               "mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight",
-              potColor(job.total_payout)
+              potColor(job.estimated_earnings)
             )}
           >
-            {money(job.total_payout)}
+            {money(job.estimated_earnings)}
           </p>
         </div>
       </header>
@@ -307,19 +307,7 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
           <Detail k="Total work" v={`${job.duration_hours}h with one node`} />
           <Detail k="Minimum tier" v={`Tier ${job.tier} (${job.tier_name})`} />
           <Detail k="Starts" v={fmt(job.starts_at)} />
-          <Detail
-            k="Est. per node"
-            v={
-              <span>
-                {money(job.estimated_earnings)}
-                {job.pool_count > 1 && (
-                  <span className="text-muted-foreground">
-                    {" "}· pot ÷ {job.pool_count}
-                  </span>
-                )}
-              </span>
-            }
-          />
+          <Detail k="Payout pot" v={money(job.total_payout)} />
           {job.required_referrals > 0 && (
             <Detail k="Referrals required" v={String(job.required_referrals)} />
           )}

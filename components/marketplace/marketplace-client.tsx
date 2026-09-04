@@ -49,6 +49,19 @@ export function MarketplaceClient() {
     };
   }, []);
 
+  // Live per-node figures: refresh as pools change while browsing.
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetch("/api/marketplace")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d) setJobs(d.jobs ?? []);
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
   if (error) return <p className="p-6 text-sm text-destructive">{error}</p>;
   if (!jobs) return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
 
@@ -80,15 +93,15 @@ export function MarketplaceClient() {
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Payout pot
+                    Per node
                   </p>
                   <p
                     className={cn(
                       "mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight",
-                      potColor(job.total_payout)
+                      potColor(job.estimated_earnings)
                     )}
                   >
-                    {money(job.total_payout)}
+                    {money(job.estimated_earnings)}
                   </p>
                 </div>
               </div>
