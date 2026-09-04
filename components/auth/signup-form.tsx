@@ -32,8 +32,8 @@ export function SignupForm() {
     const email = String(form.get("email") ?? "").trim();
     const phone = String(form.get("phone") ?? "").trim();
     const referralCode = String(form.get("referral_code") ?? "").trim();
-    if (email) body.email = email;
-    if (phone) body.phone = phone;
+    body.email = email;
+    body.phone = phone;
     if (referralCode) body.referral_code = referralCode;
 
     const res = await fetch("/api/auth/signup", {
@@ -57,7 +57,7 @@ export function SignupForm() {
     <Card className="w-full max-w-sm">
       <CardHeader>
         <CardTitle>Create account</CardTitle>
-        <CardDescription>Sign up with your email or phone number</CardDescription>
+        <CardDescription>Sign up with your email and phone number</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="grid gap-4">
@@ -72,6 +72,7 @@ export function SignupForm() {
               name="email"
               type="email"
               placeholder="you@example.com"
+              required
               autoComplete="email"
             />
           </div>
@@ -82,6 +83,7 @@ export function SignupForm() {
               name="phone"
               type="tel"
               placeholder="+2348012345678"
+              required
               autoComplete="tel"
             />
           </div>

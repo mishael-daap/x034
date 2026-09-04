@@ -18,8 +18,10 @@ function json(status: number, body: unknown) {
 
 /**
  * POST /api/auth/signup
- * Body: { name, password, email?, phone?, referral_code? }
- * Creates the account (email/phone are identification only), starts a session.
+ * Body: { name, password, email, phone, referral_code? }
+ * Both email and phone are required (Paystack needs a customer email for node
+ * purchases; phone is the user's identifier). Creates the account, starts a
+ * session.
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -38,9 +40,10 @@ export async function POST(req: Request) {
 
   if (!name) return json(400, { error: "Name is required" });
   if (password.length < 6) return json(400, { error: "Password must be at least 6 characters" });
-  if (!email && !phone) return json(400, { error: "Email or phone is required" });
-  if (email && !EMAIL_RE.test(email)) return json(400, { error: "Enter a valid email" });
-  if (phone && !PHONE_RE.test(phone)) return json(400, { error: "Enter a valid phone number" });
+  if (!email) return json(400, { error: "Email is required" });
+  if (!phone) return json(400, { error: "Phone number is required" });
+  if (!EMAIL_RE.test(email)) return json(400, { error: "Enter a valid email" });
+  if (!PHONE_RE.test(phone)) return json(400, { error: "Enter a valid phone number" });
 
   // Resolve optional referrer
   let referrer: string | null = null;

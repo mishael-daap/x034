@@ -15,3 +15,9 @@ export const PLATFORM_USER_ID = "00000000-0000-4000-8000-000000000001";
 export const NODE_SALE_SHARE = 0.5;
 export const PLATFORM_CUT_SHARE = 0.2;
 export const REFERRAL_COMMISSION_SHARE = 0.3;
+
+// Paystack node payments (roadmap 5): prices are USD; Paystack charges NGN at
+// this fixed sandbox rate. Charged kobo = round(price × USD_TO_NGN × 100).
+// A live rate lookup is deferred — this is test-mode plumbing for now.
+export const USD_TO_NGN = 1400;
+export const PAYSTACK_API = "https://api.paystack.co";

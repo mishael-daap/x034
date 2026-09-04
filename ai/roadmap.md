@@ -32,3 +32,31 @@ Scope:
 - Deposit feature removed: `/api/deposits` route + dashboard deposit UI
 - Platform balance/history and referral commission history surfaced in the UI
 - Business rules updated in `ai/business-rules.md`
+
+## 5. Paystack Node Payments
+Status: pending
+Goal: Fund node purchases with real (test-mode) card payments via Paystack. Display stays in USD; Paystack charges NGN at a fixed sandbox rate (1 USD = 1400 NGN). Flow: purchase page initializes a Paystack transaction → user pays on Paystack's hosted page → callback verifies server-side → buyer gets a `funding` credit → the existing (unchanged) purchase split runs (node + buyer debit + platform/referrer credits). Signup requires both email and phone so every buyer has a Paystack customer email.
+
+Scope:
+- Migration 0007: `payments` table (user, tier, unique `reference`, amount, currency, status initialized→success); add `funding` transaction type; recreate `user_balances` so `funding` counts immediately
+- `lib/constants.ts`: `USD_TO_NGN = 1400` (fixed sandbox rate; live rate API deferred)
+- `POST /api/nodes/purchase`: initialize Paystack transaction — amount = round(price × 1400 × 100) kobo, `currency: NGN`, `metadata: { tierId, userId }`, `callback_url` — and return `authorization_url` (client redirects); card purchases no longer gated on available balance
+- Callback page (`/nodes/purchase/complete`) + server verify: unique-`reference` idempotency guard; check `data.status === "success"`, amount, and metadata vs the signed-in session; then write the `funding` +P credit and run the existing purchase split (buyer −P, platform `node_sale` +0.5P / `platform_earnings` +0.2P, referrer `referral` +0.3P when referred)
+- Purchase page UI states: initializing → redirect to Paystack; callback: verifying → success (→ /nodes) or error + retry
+- Signup: email AND phone both required (route + form); login unchanged
+- No ledger-UI label changes needed (`funding` rows show only in balances; full transaction history is not rendered anywhere today)
+- Paystack API docs captured in `ai/dependencies/paystack/doc.md`
+- E2E (test mode): card purchase books node + reconciling rows; duplicate/retried callback does not double-credit; legacy phone-only accounts get a clear error at init
+
+## 5.1 Admin-Approved Withdrawals (incremental)
+Status: pending
+Goal: Split withdrawal *requests* from *executed* money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — logs in as a regular user; admin auth/UI deferred) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop at approval time and users never process their own withdrawals (the user-facing "Process" button is removed). Balance is re-checked at approval and the request is declined if it's no longer covered.
+
+Scope:
+- Migration 0009: `withdrawals` table — `user_id`, `amount` (positive), status `pending | approved | declined`, `created_at`, `decided_at`, `decided_by` (→ users, filled on decision), destination snapshot (bank, account number — pending bank-details decision)
+- Migration 0009: legacy migration — existing `transactions` rows `type='withdrawal' & status='pending'` move to `withdrawals` as `pending` (their ledger rows are deleted; they never affected balances); `processed` ledger rows stay as history
+- `POST /api/withdrawals`: create a request — amount > 0 and ≤ available balance
+- `GET /api/withdrawals`: the signed-in user's requests (pending/approved/declined), newest first
+- Approval endpoint (admin gating + UI deferred; dev-usable): `pending → approved` only — re-check `user_balances` ≥ amount, else `declined`; on approval insert the ledger row (`type: withdrawal`, −amount, `status: processed`) and set `decided_at`/`decided_by`; retry-safe (failed insert leaves it `pending`)
+- Withdraw page: remove the "Process" control; list requests from `GET /api/withdrawals` with status badge; live remaining-balance preview stays
+- Bank/account details collection — location TBD (profile vs request-time); no admin UI in this item

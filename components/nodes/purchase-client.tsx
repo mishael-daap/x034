@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, CircuitBoard, Cpu, MemoryStick, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,7 +20,6 @@ const money = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function PurchaseClient() {
-  const router = useRouter();
   const [tiers, setTiers] = useState<Tier[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -49,14 +47,20 @@ export function PurchaseClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tierId }),
     });
-    setBusyId(null);
     if (!res.ok) {
+      setBusyId(null);
       const d = await res.json().catch(() => null);
-      setError(d?.error ?? "Purchase failed.");
+      setError(d?.error ?? "Could not start payment.");
       return;
     }
-    router.push("/nodes");
-    router.refresh();
+    const d = await res.json().catch(() => null);
+    if (!d?.authorization_url) {
+      setBusyId(null);
+      setError("Could not start payment.");
+      return;
+    }
+    // Redirect to Paystack's hosted checkout; busyId stays set meanwhile.
+    window.location.assign(d.authorization_url);
   }
 
   if (error && !tiers) return <p className="p-6 text-sm text-destructive">{error}</p>;
@@ -113,7 +117,7 @@ export function PurchaseClient() {
               disabled={busyId === t.id}
               className="mt-4 h-10 w-full"
             >
-              {busyId === t.id ? "Purchasing…" : "Purchase"}
+              {busyId === t.id ? "Contacting Paystack…" : "Purchase"}
             </Button>
           </div>
         ))}
