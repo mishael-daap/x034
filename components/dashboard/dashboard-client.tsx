@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Server, Settings, Wallet, X } from "lucide-react";
+import { Copy, LogOut, Settings, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -305,37 +305,31 @@ export function Dashboard({ user }: { user: User }) {
               {commitments.map((n) => {
                 const a = n.assignment as Assignment;
                 const start = new Date(a.starts_at).getTime();
-                const end =
-                  start + (a.actual_duration_hours ?? a.duration_hours) * 3_600_000;
+                const totalH = a.actual_duration_hours ?? a.duration_hours;
+                const end = start + totalH * 3_600_000;
                 const running = now >= start && now < end;
+                const earnedSoFar = running
+                  ? a.estimated_earnings * Math.min(Math.max((now - start) / (end - start), 0), 1)
+                  : 0;
                 return (
                   <Link
                     key={n.id}
                     href={`/marketplace/${a.job_id}`}
-                    className="flex items-center gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+                    className="flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-2.5 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
                   >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Server className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{a.company}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Tier {n.tier_code} node · est. <span className="font-mono tabular-nums">{money(a.estimated_earnings)}</span>
-                      </p>
+                      <p className="text-xs text-muted-foreground">Tier {n.tier_code} node</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <div
-                        className={cn(
-                          "size-2 rounded-full",
-                          running ? "bg-emerald-500" : "bg-amber-500"
-                        )}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {running
-                          ? `Running ${fmtDuration(now - start)}`
-                          : `Starts in ${fmtDuration(start - now)}`}
+                    {running ? (
+                      <p className="shrink-0 font-mono text-sm font-semibold tabular-nums text-emerald-500">
+                        +${earnedSoFar.toFixed(2)}
                       </p>
-                    </div>
+                    ) : (
+                      <p className="shrink-0 text-xs text-muted-foreground">
+                        Starts in {fmtDuration(start - now)}
+                      </p>
+                    )}
                   </Link>
                 );
               })}

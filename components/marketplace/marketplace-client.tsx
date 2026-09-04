@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 type Job = {
   id: string;
@@ -21,20 +20,14 @@ type Job = {
   status: "upcoming" | "commit_window" | "in_progress" | "completed";
 };
 
-const STATUS_LABEL: Record<Job["status"], string> = {
-  upcoming: "Upcoming",
-  commit_window: "Open",
-  in_progress: "In progress",
-  completed: "Completed",
-};
+const money = (n: number) =>
+  `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function fmt(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+/** Payout-pot color by price range: red < $0.50 · primary $0.50–$1 · success > $1. */
+function potColor(value: number): string {
+  if (value < 0.5) return "text-red-500";
+  if (value > 1) return "text-emerald-500";
+  return "text-primary";
 }
 
 export function MarketplaceClient() {
@@ -60,8 +53,8 @@ export function MarketplaceClient() {
   if (!jobs) return <p className="p-6 text-sm text-muted-foreground">Loading…</p>;
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-10">
-      <header>
+    <div className="mx-auto w-full max-w-md p-4 pb-10">
+      <header className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
         <p className="text-sm text-muted-foreground">Commit a node to a job and earn.</p>
       </header>
@@ -69,48 +62,43 @@ export function MarketplaceClient() {
       {jobs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No open jobs right now.</p>
       ) : (
-        jobs.map((job) => (
-          <Link key={job.id} href={`/marketplace/${job.id}`}>
-            <Card className="transition-colors hover:bg-muted/50">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{job.company}</CardTitle>
-                  <Badge variant="secondary">Tier {job.tier}</Badge>
+        <div className="grid gap-3">
+          {jobs.map((job) => (
+            <Link
+              key={job.id}
+              href={`/marketplace/${job.id}`}
+              className="block rounded-xl bg-card p-5 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Company
+                  </p>
+                  <h2 className="mt-0.5 truncate text-base font-semibold tracking-tight">
+                    {job.company}
+                  </h2>
                 </div>
-              </CardHeader>
-              <CardContent className="grid gap-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Est. per node</span>
-                  <span className="font-medium">≈ {job.estimated_earnings.toFixed(2)}</span>
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Payout pot
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 font-mono text-3xl font-bold tabular-nums tracking-tight",
+                      potColor(job.total_payout)
+                    )}
+                  >
+                    {money(job.total_payout)}
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total pool</span>
-                  <span>{job.total_payout.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Starts</span>
-                  <span>{fmt(job.starts_at)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Pool</span>
-                  <span>
-                    {job.pool_count}/{job.max_pool} nodes
-                  </span>
-                </div>
-                {job.required_referrals > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Referrals needed</span>
-                    <span>{job.required_referrals}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge variant="outline">{STATUS_LABEL[job.status]}</Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))
+              </div>
+
+              <p className="mt-4 font-mono text-sm tabular-nums text-muted-foreground">
+                {job.pool_count}/{job.max_pool} nodes
+              </p>
+            </Link>
+          ))}
+        </div>
       )}
     </div>
   );

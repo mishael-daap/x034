@@ -26,7 +26,15 @@ type JobRow = {
   min_tier: { code: string; name: string } | null;
 };
 
-type AssignmentRow = { node: string; status: string };
+type AssignmentRow = {
+  status: string;
+  created_at: string;
+  node: {
+    id: string;
+    owner: { id: string; name: string } | null;
+    tier: { code: string } | null;
+  } | null;
+};
 
 type NodeRow = { id: string; tier: { code: string; name: string } | null };
 
@@ -44,12 +52,23 @@ export async function GET(_req: Request, { params }: Params) {
   if (!job) return json(404, { error: "Job not found" });
 
   const assignRes = await supabaseFetch<AssignmentRow[]>(
-    `/rest/v1/assignments?select=node,status&job=eq.${jobId}`
+    `/rest/v1/assignments?select=node:nodes(id,owner:users(id,name),tier:node_tiers(code)),status,created_at&job=eq.${jobId}`
   );
   const assignments = assignRes.status === 200 ? (assignRes.data ?? []) : [];
-  const poolCount = assignments.filter(
+  const poolMembers = assignments.filter(
     (a) => a.status === "committed" || a.status === "active"
-  ).length;
+  );
+  const poolCount = poolMembers.length;
+
+  // Everyone whose node is in the pool (committed or running).
+  const participants = poolMembers.map((a) => ({
+    name: a.node?.owner?.name ?? "Unknown",
+    node_id: a.node?.id ?? "",
+    owner_id: a.node?.owner?.id ?? "",
+    tier_code: a.node?.tier?.code ?? "",
+    status: a.status,
+    committed_at: a.created_at,
+  }));
 
   const realizedDuration = job.actual_duration_hours ?? estimateDuration(job.duration_hours, poolCount);
   const now = Date.now();
@@ -73,21 +92,55 @@ export async function GET(_req: Request, { params }: Params) {
 
   // Optional signed-in context: qualifying nodes + whether one is already committed.
   const session = await getSessionUser();
-  if (!session) return json(200, { job: payload, user: null });
+  if (!session) return json(200, { job: payload, participants, user: null });
 
   const nodesRes = await supabaseFetch<NodeRow[]>(
     `/rest/v1/nodes?select=id,tier:node_tiers(code,name)&owner=eq.${session.sub}`
   );
   const nodes = nodesRes.status === 200 ? (nodesRes.data ?? []) : [];
 
-  const committedNodeIds = new Set(assignments.map((a) => a.node));
-  const qualifyingNodes = nodes
-    .filter((n) => nodeQualifies(n.tier?.code ?? "", job.min_tier?.code ?? ""))
-    .map((n) => ({ id: n.id, tier: n.tier?.code ?? "" }));
-  const committedNodeId = qualifyingNodes.find((n) => committedNodeIds.has(n.id))?.id ?? null;
+  // Nodes already in this job's pool + how many the user has committed.
+  const jobMemberNodeIds = new Set(poolMembers.map((a) => a.node?.id));
+  const committedCount = poolMembers.filter((a) => a.node?.owner?.id === session.sub).length;
+
+  // A qualifying node is available when it isn't on this job and isn't busy on
+  // another job that hasn't elapsed yet (mirrors the commit route's rules).
+  const qualifyingNodes = nodes.filter((n) =>
+    nodeQualifies(n.tier?.code ?? "", job.min_tier?.code ?? "")
+  );
+  const occupiedElsewhere = new Set<string>();
+  if (qualifyingNodes.length) {
+    const ids = qualifyingNodes.map((n) => n.id).join(",");
+    const occRes = await supabaseFetch<
+      {
+        node: string;
+        job: {
+          starts_at: string;
+          duration_hours: number;
+          actual_duration_hours: number | null;
+        } | null;
+      }[]
+    >(
+      `/rest/v1/assignments?select=node,job:jobs(starts_at,duration_hours,actual_duration_hours)&node=in.(${ids})&status=in.(committed,active)`
+    );
+    for (const a of occRes.data ?? []) {
+      if (jobMemberNodeIds.has(a.node)) continue; // committed to this job already = fine
+      const dur = a.job?.actual_duration_hours ?? a.job?.duration_hours ?? 0;
+      const elapsed =
+        new Date(a.job?.starts_at ?? 0).getTime() + dur * 3_600_000 <= now;
+      if (!elapsed) occupiedElsewhere.add(a.node);
+    }
+  }
+
+  const userNodes = qualifyingNodes.map((n) => ({
+    id: n.id,
+    tier: n.tier?.code ?? "",
+    available: !jobMemberNodeIds.has(n.id) && !occupiedElsewhere.has(n.id),
+  }));
 
   return json(200, {
     job: payload,
-    user: { qualifying_nodes: qualifyingNodes, committed_node_id: committedNodeId },
+    participants: participants.map((p) => ({ ...p, mine: p.owner_id === session.sub })),
+    user: { nodes: userNodes, committed_count: committedCount },
   });
 }
