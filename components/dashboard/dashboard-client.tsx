@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Send, Settings, ShieldCheck, User, Wallet, X } from "lucide-react";
+import { Copy, LogOut, Settings, ShieldCheck, User, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -247,18 +247,9 @@ export function Dashboard({ user }: { user: User }) {
             <Wallet className="size-4" />
             Available balance
           </div>
-          <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="font-[var(--font-roboto-mono)] text-6xl font-black tabular-nums tracking-tighter">
-              {data.balance == null ? "—" : money(data.balance)}
-            </p>
-            <Link
-              href="/withdraw"
-              className="mb-1 inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium text-primary-foreground/80 transition-colors hover:bg-white/15 hover:text-primary-foreground"
-            >
-              <Send className="size-3.5" />
-              Withdraw
-            </Link>
-          </div>
+          <p className="mt-2 font-[var(--font-roboto-mono)] text-6xl font-black tabular-nums tracking-tighter">
+            {data.balance == null ? "—" : money(data.balance)}
+          </p>
         </section>
       )}
 
