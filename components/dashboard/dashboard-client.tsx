@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Send, Settings, User, Wallet, X } from "lucide-react";
+import { Copy, LogOut, Send, Settings, ShieldCheck, User, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -13,6 +13,7 @@ type User = {
   email: string | null;
   phone: string | null;
   referral_code: string;
+  role?: string;
 };
 
 type JobStatus = "upcoming" | "commit_window" | "in_progress" | "completed";
@@ -139,10 +140,14 @@ export function Dashboard({ user }: { user: User }) {
     router.refresh();
   }
 
-  const menu: MenuItem[] = [
+  const menu: MenuItem[] = [];
+  if (user.role === "admin") {
+    menu.push({ label: "Admin panel", icon: ShieldCheck, onClick: () => router.push("/admin") });
+  }
+  menu.push(
     { label: "Profile", icon: User, onClick: () => router.push("/me") },
-    { label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut },
-  ];
+    { label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut }
+  );
 
   // Active commitments = nodes with a live assignment (occupied until its job elapses).
   const now = nowMs;
