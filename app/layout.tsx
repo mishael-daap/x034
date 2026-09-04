@@ -24,6 +24,9 @@ const robotoMono = Roboto_Mono({
 export const metadata: Metadata = {
   title: "Compute Marketplace",
   description: "Own a node, earn from compute jobs.",
+  icons: {
+    icon: [{ url: "/assets/logo.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
