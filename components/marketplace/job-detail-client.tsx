@@ -140,6 +140,22 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
     };
   }, [jobId]);
 
+  // Live pool: while the job is open, refetch so the pot ÷ pool estimate (and
+  // participant list) updates as nodes commit from anywhere, without a reload.
+  useEffect(() => {
+    const status = data?.job.status;
+    if (status !== "upcoming" && status !== "commit_window") return;
+    const id = setInterval(() => {
+      fetch(`/api/marketplace/${jobId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d) setData(d);
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(id);
+  }, [data?.job.status, jobId]);
+
   // Lazy lock: once the job has started and isn't locked yet, materialize earnings.
   useEffect(() => {
     const job = data?.job;
@@ -291,7 +307,19 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
           <Detail k="Total work" v={`${job.duration_hours}h with one node`} />
           <Detail k="Minimum tier" v={`Tier ${job.tier} (${job.tier_name})`} />
           <Detail k="Starts" v={fmt(job.starts_at)} />
-          <Detail k="Est. per node" v={money(job.estimated_earnings)} />
+          <Detail
+            k="Est. per node"
+            v={
+              <span>
+                {money(job.estimated_earnings)}
+                {job.pool_count > 1 && (
+                  <span className="text-muted-foreground">
+                    {" "}· pot ÷ {job.pool_count}
+                  </span>
+                )}
+              </span>
+            }
+          />
           {job.required_referrals > 0 && (
             <Detail k="Referrals required" v={String(job.required_referrals)} />
           )}
