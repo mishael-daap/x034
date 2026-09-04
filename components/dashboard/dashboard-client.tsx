@@ -16,7 +16,7 @@ type User = {
   role?: string;
 };
 
-type JobStatus = "upcoming" | "commit_window" | "in_progress" | "completed";
+type JobStatus = "upcoming" | "locked" | "in_progress" | "completed";
 
 type Job = {
   id: string;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
+import { COMMIT_WINDOW_HOURS } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -16,8 +17,9 @@ type Params = { params: Promise<{ jobId: string }> };
 
 /**
  * POST /api/marketplace/[jobId]/remove — pull a committed node out of the pool.
- * Allowed only before the job starts (pool not locked): owner, own node,
- * assignment exists + still `committed`.
+ * Allowed only while the pool is open (up to COMMIT_WINDOW_HOURS before start):
+ * owner, own node, assignment exists + still `committed`. Once the pool locks
+ * (1h before start) nothing can be added or removed.
  */
 export async function POST(req: Request, { params }: Params) {
   const { jobId } = await params;
@@ -40,8 +42,12 @@ export async function POST(req: Request, { params }: Params) {
   if (!job) return json(404, { error: "Job not found" });
 
   const now = Date.now();
-  if (now >= new Date(job.starts_at).getTime()) {
-    return json(409, { error: "Job has already started — nodes can no longer be removed" });
+  const start = new Date(job.starts_at).getTime();
+  const cutoff = start - COMMIT_WINDOW_HOURS * 3_600_000;
+  if (now >= cutoff) {
+    return json(409, {
+      error: "Pool is locked — nodes can't be added or removed within an hour of the job starting",
+    });
   }
 
   const nodeRes = await supabaseFetch<NodeRow[]>(

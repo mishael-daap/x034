@@ -1,6 +1,6 @@
 import { COMMIT_WINDOW_HOURS, PLATFORM_EARNINGS_FLOOR } from "@/lib/constants";
 
-export type JobStatus = "upcoming" | "commit_window" | "in_progress" | "completed";
+export type JobStatus = "upcoming" | "locked" | "in_progress" | "completed";
 
 /** Tier ordering: C (lowest) → B → A (highest). */
 export const TIER_RANK: Record<string, number> = { C: 1, B: 2, A: 3 };
@@ -31,6 +31,11 @@ export function estimateDuration(durationHours: number, poolSize: number): numbe
 /**
  * Derived job status from time. `durationHours` should be the realized duration
  * (actual_duration_hours) once locked, else the current estimate.
+ *
+ * upcoming:        more than 1h before start — pool open (commit/remove)
+ * locked:          last hour before start — pool frozen (no joins/removes)
+ * in_progress:     running (locked at start, earnings split at lock)
+ * completed:       elapsed
  */
 export function deriveJobStatus(
   startsAt: string,
@@ -39,8 +44,14 @@ export function deriveJobStatus(
 ): JobStatus {
   const start = new Date(startsAt).getTime();
   const end = start + durationHours * 3_600_000;
-  if (now < start - COMMIT_WINDOW_HOURS * 3_600_000) return "upcoming";
-  if (now < start) return "commit_window";
+  const cutoff = lockCutoffMs(startsAt);
+  if (now < cutoff) return "upcoming";
+  if (now < start) return "locked";
   if (now < end) return "in_progress";
   return "completed";
+}
+
+/** The moment the pool freezes: COMMIT_WINDOW_HOURS before the job starts. */
+export function lockCutoffMs(startsAt: string): number {
+  return new Date(startsAt).getTime() - COMMIT_WINDOW_HOURS * 3_600_000;
 }

@@ -17,7 +17,7 @@ type Job = {
   max_pool: number;
   estimated_duration: number;
   estimated_earnings: number;
-  status: "upcoming" | "commit_window" | "in_progress" | "completed";
+  status: "upcoming" | "locked" | "in_progress" | "completed";
 };
 
 const money = (n: number) =>

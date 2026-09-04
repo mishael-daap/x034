@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { lockCutoffMs } from "@/lib/jobs";
 
 type UserNode = { id: string; tier: string; available: boolean };
 type UserCtx = { nodes: UserNode[]; committed_count: number } | null;
@@ -44,7 +45,7 @@ type JobDetail = {
   max_pool: number;
   estimated_duration: number;
   estimated_earnings: number;
-  status: "upcoming" | "commit_window" | "in_progress" | "completed";
+  status: "upcoming" | "locked" | "in_progress" | "completed";
 };
 
 const AVATAR_ICONS = [Building2, Landmark, Factory, Cpu, Database, Zap, Globe, Rocket];
@@ -140,11 +141,12 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
     };
   }, [jobId]);
 
-  // Live pool: while the job is open, refetch so the pot ÷ pool estimate (and
-  // participant list) updates as nodes commit from anywhere, without a reload.
+  // Live pool: while the job hasn't finished, refetch so the pot ÷ pool
+  // estimate (and participant list) updates and status flips (open → locked →
+  // in progress) without a reload.
   useEffect(() => {
     const status = data?.job.status;
-    if (status !== "upcoming" && status !== "commit_window") return;
+    if (status === "completed") return;
     const id = setInterval(() => {
       fetch(`/api/marketplace/${jobId}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -220,7 +222,8 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
   const now = nowMs;
   const start = new Date(job.starts_at).getTime();
   const end = start + job.estimated_duration * 3_600_000;
-  const open = job.status === "upcoming" || job.status === "commit_window";
+  const open = job.status === "upcoming"; // pool open: commits + removes allowed
+  const locked = job.status === "locked"; // frozen until start
   const running = job.status === "in_progress";
   const poolFull = job.pool_count >= job.max_pool;
   const myNodes = user?.nodes ?? [];
@@ -293,10 +296,18 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
         </section>
         <section className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {open ? "Locks in" : running ? "Ends in" : "Status"}
+            {open ? "Locks in" : locked ? "Locked" : running ? "Ends in" : "Status"}
           </p>
           <p className="mt-1 font-mono text-xl font-bold tabular-nums tracking-tight">
-            {open || running ? fmtCountdown(running ? end - now : start - now) : "Done"}
+            {open ? (
+              fmtCountdown(lockCutoffMs(job.starts_at) - now)
+            ) : locked ? (
+              fmtCountdown(start - now)
+            ) : running ? (
+              fmtCountdown(end - now)
+            ) : (
+              "Done"
+            )}
           </p>
         </section>
       </div>
