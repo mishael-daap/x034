@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scratch/reference material — never linted or shipped.
+    "ai/.temp/**",
   ]),
 ]);
 
