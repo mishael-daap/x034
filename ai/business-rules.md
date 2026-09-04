@@ -24,7 +24,7 @@
 
 ## Node Pool
 - Nodes join until the pool hits capacity or 1 h before `starts_at`, whichever first.
-- Capacity `n_max = floor(total_payout ÷ platform floor)` (floor = 1.0).
+- Capacity `n_max = floor(total_payout ÷ platform floor)` (floor = 0.1).
 - Pool locks at start — no joins or leaves after.
 
 ## Money & Ledger
