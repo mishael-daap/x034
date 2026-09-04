@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Compute Dashboard</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --background: #090b10;
+      --surface: #12151d;
+      --surface-light: #1a1e28;
+      --border: rgba(255, 255, 255, 0.07);
+
+      --text: #f7f8fa;
+      --muted: #8b92a1;
+
+      --primary: #7c5cff;
+      --primary-light: #9a83ff;
+      --success: #45d39c;
+
+      --radius-lg: 24px;
+      --radius-md: 18px;
+      --radius-sm: 12px;
+    }
+
+    body {
+      font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 460px;
+      margin: auto;
+      min-height: 100vh;
+      padding: 24px 18px 110px;
+    }
+
+    /* =========================
+       HEADER
+    ========================= */
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .greeting {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .greeting span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .greeting h1 {
+      font-size: 21px;
+      font-weight: 600;
+    }
+
+    .profile {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(
+        135deg,
+        var(--primary),
+        #3e2c91
+      );
+    }
+
+    /* =========================
+       BALANCE HERO
+    ========================= */
+
+    .balance-card {
+      position: relative;
+      overflow: hidden;
+
+      padding: 24px;
+      border-radius: var(--radius-lg);
+
+      background:
+        radial-gradient(
+          circle at top right,
+          rgba(147, 112, 255, 0.5),
+          transparent 45%
+        ),
+        linear-gradient(
+          135deg,
+          #34216d,
+          #181329
+        );
+
+      border: 1px solid rgba(255,255,255,0.08);
+
+      margin-bottom: 28px;
+    }
+
+    .balance-label {
+      color: rgba(255,255,255,0.65);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .balance {
+      font-size: 38px;
+      font-weight: 650;
+      letter-spacing: -1.5px;
+      margin-bottom: 8px;
+    }
+
+    .balance-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 24px;
+    }
+
+    .balance-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .balance-button {
+      flex: 1;
+
+      border: none;
+      border-radius: 14px;
+
+      padding: 13px;
+
+      background: rgba(255,255,255,0.12);
+      color: white;
+
+      font-size: 13px;
+      cursor: pointer;
+
+      backdrop-filter: blur(10px);
+    }
+
+    .balance-button.primary {
+      background: white;
+      color: #15151a;
+      font-weight: 600;
+    }
+
+    /* =========================
+       SECTION HEADER
+    ========================= */
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .section-link {
+      color: var(--primary-light);
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    /* =========================
+       REFERRALS
+    ========================= */
+
+    .referral-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+
+      border-radius: var(--radius-lg);
+      padding: 18px;
+
+      margin-bottom: 28px;
+    }
+
+    .referral-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: var(--surface-light);
+      padding: 15px;
+      border-radius: var(--radius-md);
+    }
+
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .referral-code {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      background: #0d1016;
+      border: 1px solid var(--border);
+
+      padding: 13px 14px;
+      border-radius: 14px;
+    }
+
+    .referral-code span {
+      color: var(--muted);
+      font-size: 11px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .referral-code strong {
+      font-size: 14px;
+      letter-spacing: 0.8px;
+    }
+
+    .copy-button {
+      background: transparent;
+      border: none;
+
+      color: var(--primary-light);
+      font-size: 12px;
+      font-weight: 600;
+
+      cursor: pointer;
+    }
+
+    /* =========================
+       ACTIVE COMMITMENTS
+    ========================= */
+
+    .commitment-card {
+      display: flex;
+      align-items: center;
+
+      gap: 14px;
+
+      padding: 16px;
+
+      background: var(--surface);
+      border: 1px solid var(--border);
+
+      border-radius: var(--radius-md);
+
+      margin-bottom: 10px;
+    }
+
+    .node-icon {
+      width: 44px;
+      height: 44px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      border-radius: 14px;
+
+      background: rgba(124, 92, 255, 0.15);
+      color: var(--primary-light);
+
+      font-size: 18px;
+    }
+
+    .commitment-info {
+      flex: 1;
+    }
+
+    .commitment-info h3 {
+      font-size: 14px;
+      font-weight: 550;
+      margin-bottom: 5px;
+    }
+
+    .commitment-info p {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .status span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    /* =========================
+       JOBS
+    ========================= */
+
+    .jobs-section {
+      margin-top: 30px;
+    }
+
+    .job-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+
+      border-radius: var(--radius-lg);
+
+      padding: 18px;
+
+      margin-bottom: 12px;
+    }
+
+    .job-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+
+      margin-bottom: 18px;
+    }
+
+    .job-company {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .job-company h3 {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .job-company span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .payout {
+      text-align: right;
+    }
+
+    .payout span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+
+    .payout strong {
+      color: var(--success);
+      font-size: 16px;
+    }
+
+    .job-details {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .job-detail {
+      flex: 1;
+
+      padding: 11px;
+
+      background: var(--surface-light);
+      border-radius: 12px;
+    }
+
+    .job-detail span {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .job-detail strong {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .job-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .requirement {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .commit-button {
+      background: var(--primary);
+      color: white;
+
+      border: none;
+      border-radius: 12px;
+
+      padding: 10px 16px;
+
+      font-size: 12px;
+      font-weight: 600;
+
+      cursor: pointer;
+    }
+
+    /* =========================
+       BOTTOM NAVIGATION
+    ========================= */
+
+    .bottom-nav {
+      position: fixed;
+
+      bottom: 16px;
+      left: 50%;
+
+      transform: translateX(-50%);
+
+      width: min(420px, calc(100% - 36px));
+
+      display: flex;
+      justify-content: space-around;
+
+      padding: 13px;
+
+      background: rgba(22, 25, 34, 0.92);
+
+      border: 1px solid var(--border);
+      border-radius: 22px;
+
+      backdrop-filter: blur(20px);
+    }
+
+    .nav-item {
+      color: var(--muted);
+      font-size: 11px;
+      text-decoration: none;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .nav-item.active {
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="app">
+
+    <!-- HEADER -->
+
+    <header class="header">
+      <div class="greeting">
+        <span>Good morning</span>
+        <h1>Mishael 👋</h1>
+      </div>
+
+      <div class="profile"></div>
+    </header>
+
+
+    <!-- BALANCE -->
+
+    <section class="balance-card">
+
+      <p class="balance-label">
+        Available Balance
+      </p>
+
+      <h2 class="balance">
+        24,850.00
+      </h2>
+
+      <p class="balance-subtitle">
+        Test currency earned from completed compute jobs
+      </p>
+
+      <div class="balance-actions">
+        <button class="balance-button primary">
+          View History
+        </button>
+
+        <button class="balance-button">
+          Earnings
+        </button>
+      </div>
+
+    </section>
+
+
+    <!-- REFERRALS -->
+
+    <div class="section-header">
+      <h2 class="section-title">
+        Referrals
+      </h2>
+    </div>
+
+    <section class="referral-card">
+
+      <div class="referral-stats">
+
+        <div class="stat">
+          <span class="stat-label">
+            Commission Earned
+          </span>
+
+          <strong class="stat-value">
+            3,420
+          </strong>
+        </div>
+
+        <div class="stat">
+          <span class="stat-label">
+            Total Referrals
+          </span>
+
+          <strong class="stat-value">
+            18
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="referral-code">
+
+        <div>
+          <span>Your referral code</span>
+          <strong>MISHAEL20</strong>
+        </div>
+
+        <button class="copy-button">
+          Copy
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- ACTIVE COMMITMENTS -->
+
+    <div class="section-header">
+
+      <h2 class="section-title">
+        Active Commitments
+      </h2>
+
+      <a href="#" class="section-link">
+        View all
+      </a>
+
+    </div>
+
+
+    <section>
+
+      <div class="commitment-card">
+
+        <div class="node-icon">
+          ◈
+        </div>
+
+        <div class="commitment-info">
+          <h3>Node #2048</h3>
+          <p>AI Training Pool</p>
+        </div>
+
+        <div class="status">
+          <div class="status-dot"></div>
+          <span>2h 14m</span>
+        </div>
+
+      </div>
+
+
+      <div class="commitment-card">
+
+        <div class="node-icon">
+          ◈
+        </div>
+
+        <div class="commitment-info">
+          <h3>Node #1932</h3>
+          <p>Rendering Job</p>
+        </div>
+
+        <div class="status">
+          <div class="status-dot"></div>
+          <span>5h 42m</span>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- MARKETPLACE -->
+
+    <section class="jobs-section">
+
+      <div class="section-header">
+
+        <h2 class="section-title">
+          Available Compute Jobs
+        </h2>
+
+        <a href="#" class="section-link">
+          Marketplace
+        </a>
+
+      </div>
+
+
+      <!-- JOB -->
+
+      <article class="job-card">
+
+        <div class="job-top">
+
+          <div class="job-company">
+            <h3>GPU Compute Pool</h3>
+            <span>Starts in 45 minutes</span>
+          </div>
+
+          <div class="payout">
+            <span>Payout Pot</span>
+            <strong>12,500</strong>
+          </div>
+
+        </div>
+
+
+        <div class="job-details">
+
+          <div class="job-detail">
+            <span>Duration</span>
+            <strong>4 Hours</strong>
+          </div>
+
+          <div class="job-detail">
+            <span>Minimum Tier</span>
+            <strong>Tier 2</strong>
+          </div>
+
+          <div class="job-detail">
+            <span>Referrals</span>
+            <strong>5 Required</strong>
+          </div>
+
+        </div>
+
+
+        <div class="job-footer">
+
+          <span class="requirement">
+            Requires an available node
+          </span>
+
+          <button class="commit-button">
+            Commit Node
+          </button>
+
+        </div>
+
+      </article>
+
+
+      <!-- JOB -->
+
+      <article class="job-card">
+
+        <div class="job-top">
+
+          <div class="job-company">
+            <h3>Distributed AI Training</h3>
+            <span>Starts tomorrow</span>
+          </div>
+
+          <div class="payout">
+            <span>Payout Pot</span>
+            <strong>28,000</strong>
+          </div>
+
+        </div>
+
+
+        <div class="job-details">
+
+          <div class="job-detail">
+            <span>Duration</span>
+            <strong>12 Hours</strong>
+          </div>
+
+          <div class="job-detail">
+            <span>Minimum Tier</span>
+            <strong>Tier 3</strong>
+          </div>
+
+          <div class="job-detail">
+            <span>Referrals</span>
+            <strong>10 Required</strong>
+          </div>
+
+        </div>
+
+
+        <div class="job-footer">
+
+          <span class="requirement">
+            Unlock requirement applies
+          </span>
+
+          <button class="commit-button">
+            View Job
+          </button>
+
+        </div>
+
+      </article>
+
+    </section>
+
+  </main>
+
+
+  <!-- NAVIGATION -->
+
+  <nav class="bottom-nav">
+
+    <a href="#" class="nav-item active">
+      <span>⌂</span>
+      Home
+    </a>
+
+    <a href="#" class="nav-item">
+      <span>◈</span>
+      Nodes
+    </a>
+
+    <a href="#" class="nav-item">
+      <span>▦</span>
+      Marketplace
+    </a>
+
+    <a href="#" class="nav-item">
+      <span>◎</span>
+      Profile
+    </a>
+
+  </nav>
+
+</body>
+</html>

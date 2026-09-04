@@ -43,5 +43,9 @@ next-env.d.ts
 # personal scratch
 mishael-s-canvas.md
 
+# next dev auto-generated agent docs
+AGENTS.md
+CLAUDE.md
+
 # downloaded reference code (never committed)
 /ai/.temp/
