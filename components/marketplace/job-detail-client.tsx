@@ -295,8 +295,13 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
           </p>
         </section>
         <section className="min-w-0 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            {open ? "Locks in" : locked ? "Locked" : running ? "Ends in" : "Status"}
+          <p
+            className={cn(
+              "text-[11px] font-medium uppercase tracking-wider",
+              open ? "text-red-500" : locked ? "text-emerald-500" : "text-muted-foreground"
+            )}
+          >
+            {open ? "Locks in" : locked ? "Starts in" : running ? "Ends in" : "Status"}
           </p>
           <p className="mt-1 font-mono text-xl font-bold tabular-nums tracking-tight">
             {open ? (
