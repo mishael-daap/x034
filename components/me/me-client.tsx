@@ -2,112 +2,202 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Users, ArrowUpFromLine } from "lucide-react";
+import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type User = {
+type Profile = {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
-  referral_code: string;
+  account_number: string | null;
+  bank: { id: string; name: string } | null;
 };
+
+type Bank = { id: string; name: string };
 
 export function MeClient() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [copied, setCopied] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Editable field state (initialised once the profile loads).
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bankId, setBankId] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
 
   useEffect(() => {
     let ignore = false;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : { user: null }))
-      .then((d) => {
-        if (!ignore) setUser(d.user ?? null);
+    Promise.all([
+      fetch("/api/me").then((r) => (r.ok ? r.json() : { user: null })),
+      fetch("/api/banks").then((r) => (r.ok ? r.json() : { banks: [] })),
+    ])
+      .then(([me, b]) => {
+        if (ignore) return;
+        const user = me.user ?? null;
+        setProfile(user);
+        if (user) {
+          setName(user.name ?? "");
+          setEmail(user.email ?? "");
+          setPhone(user.phone ?? "");
+          setBankId(user.bank?.id ?? "");
+          setAccountNumber(user.account_number ?? "");
+        }
+        setBanks(b.banks ?? []);
       })
       .catch(() => {
-        if (!ignore) setUser(null);
+        if (!ignore) setProfile(null);
       });
     return () => {
       ignore = true;
     };
   }, []);
 
-  if (user === undefined) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-6">
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-6">
-        <Button onClick={() => router.push("/login")}>Sign in</Button>
-      </div>
-    );
-  }
-
-  const me = user;
-
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(me.referral_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard unavailable — ignore
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        bank: bankId || null,
+        account_number: accountNumber || null,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Could not save profile.");
+      return;
     }
+    const d = await res.json().catch(() => null);
+    if (d?.user) setProfile(d.user);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   }
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
+  if (!profile) {
+    return (
+      <div className="mx-auto w-full max-w-md p-6">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <div className="mt-4 grid gap-3">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="mx-auto w-full max-w-md p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{me.name}</CardTitle>
-          <CardDescription>{me.email ?? me.phone}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <p className="text-xs text-muted-foreground">Referral code</p>
-              <p className="font-mono text-sm font-medium">{me.referral_code}</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={copyCode}>
-              <Copy />
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <Button variant="outline" className="w-full" onClick={() => router.push("/referrals")}>
-            <Users />
-            My referrals
-          </Button>
-          <Button variant="outline" className="w-full" onClick={() => router.push("/withdraw")}>
-            <ArrowUpFromLine />
-            Withdraw
-          </Button>
-          <Button variant="destructive" className="w-full" onClick={handleSignOut} disabled={signingOut}>
-            <LogOut />
-            {signingOut ? "Signing out…" : "Sign out"}
-          </Button>
-        </CardContent>
-      </Card>
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label="Go back"
+        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <ArrowLeft className="size-5" />
+      </button>
+
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Profile</h1>
+      <p className="text-sm text-muted-foreground">
+        Your details — the account below is where withdrawals are paid.
+      </p>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSave();
+        }}
+        className="mt-5 grid gap-4"
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="phone">Phone</Label>
+          <Input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+            autoComplete="tel"
+          />
+        </div>
+
+        <div className="h-px bg-border" />
+
+        <div className="grid gap-1.5">
+          <Label htmlFor="bank">Bank</Label>
+          <select
+            id="bank"
+            value={bankId}
+            onChange={(e) => setBankId(e.target.value)}
+            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+          >
+            <option value="">Select a bank</option>
+            {banks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="account_number">Account number</Label>
+          <Input
+            id="account_number"
+            inputMode="numeric"
+            value={accountNumber}
+            onChange={(e) => setAccountNumber(e.target.value)}
+            placeholder="e.g. 0123456789"
+          />
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" disabled={saving} className="h-10 w-full">
+          {saving ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : saved ? (
+            <Check className="size-4" />
+          ) : null}
+          {saving ? "Saving…" : saved ? "Saved" : "Save changes"}
+        </Button>
+      </form>
     </div>
   );
 }

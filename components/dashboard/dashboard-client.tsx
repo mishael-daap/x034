@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Send, Settings, Wallet, X } from "lucide-react";
+import { Copy, LogOut, Send, Settings, User, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -140,6 +140,7 @@ export function Dashboard({ user }: { user: User }) {
   }
 
   const menu: MenuItem[] = [
+    { label: "Profile", icon: User, onClick: () => router.push("/me") },
     { label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut },
   ];
 
@@ -263,18 +264,24 @@ export function Dashboard({ user }: { user: User }) {
         <section className="mt-8">
           <h2 className="mb-3 text-sm font-semibold">Referrals</h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+            <Link
+              href="/referrals"
+              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
               <p className="text-xs text-muted-foreground">Commission earned</p>
               <p className="mt-1 font-mono text-xl font-semibold tabular-nums tracking-tight">
                 {money(data.commissionEarnings ?? 0)}
               </p>
-            </div>
-            <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+            </Link>
+            <Link
+              href="/referrals"
+              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
               <p className="text-xs text-muted-foreground">Total referrals</p>
               <p className="mt-1 text-xl font-semibold tracking-tight">
                 {data.referral?.total_referees ?? 0}
               </p>
-            </div>
+            </Link>
           </div>
           {data.referral && (
             <div className="mt-3 flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
