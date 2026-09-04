@@ -50,13 +50,27 @@ Scope:
 
 ## 5.1 Admin-Approved Withdrawals (incremental)
 Status: pending
-Goal: Split withdrawal *requests* from *executed* money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — logs in as a regular user; admin auth/UI deferred) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop at approval time and users never process their own withdrawals (the user-facing "Process" button is removed). Balance is re-checked at approval and the request is declined if it's no longer covered.
+Goal: Split withdrawal *requests* from *executed* money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — a `role = 'admin'` user who signs in through the normal login; admin UI is roadmap 5.2) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop at approval time and users never process their own withdrawals (the user-facing "Process" button is removed). Balance is re-checked at approval and the request is declined if it's no longer covered. The platform user becomes the admin account (real credentials, `role = 'admin'`), and the decision endpoint is admin-gated from the start.
 
 Scope:
-- Migration 0009: `withdrawals` table — `user_id`, `amount` (positive), status `pending | approved | declined`, `created_at`, `decided_at`, `decided_by` (→ users, filled on decision), destination snapshot (bank, account number — pending bank-details decision)
+- Migration 0009: `withdrawals` table — `user_id`, `amount` (positive), status `pending | approved | declined`, `reason`, `created_at`, `decided_at`, `decided_by` (→ users, filled on decision), destination snapshot (`bank` → banks, `account_number`, `account_name`)
 - Migration 0009: legacy migration — existing `transactions` rows `type='withdrawal' & status='pending'` move to `withdrawals` as `pending` (their ledger rows are deleted; they never affected balances); `processed` ledger rows stay as history
-- `POST /api/withdrawals`: create a request — amount > 0 and ≤ available balance
+- Migration 0009: admin identity — `users.role` (`user` | `admin`, default `user`); platform row (`PLATFORM_USER_ID`) gets `role = 'admin'` and a real scrypt password (dev one-off, app-side hash — not embeddable in SQL) so it signs in at `platform@x034.local` like any user
+- Profile (Me page) rebuild: editable name, email, phone, bank + account number (`PATCH /api/me`); `GET /api/banks`; destination snapshot read from the profile at request time; no referral-code card / withdraw / referrals buttons / sign-out on Me (dashboard covers those)
+- `POST /api/withdrawals`: create a request — amount > 0, ≤ available balance, profile account details present
 - `GET /api/withdrawals`: the signed-in user's requests (pending/approved/declined), newest first
-- Approval endpoint (admin gating + UI deferred; dev-usable): `pending → approved` only — re-check `user_balances` ≥ amount, else `declined`; on approval insert the ledger row (`type: withdrawal`, −amount, `status: processed`) and set `decided_at`/`decided_by`; retry-safe (failed insert leaves it `pending`)
-- Withdraw page: remove the "Process" control; list requests from `GET /api/withdrawals` with status badge; live remaining-balance preview stays
-- Bank/account details collection — location TBD (profile vs request-time); no admin UI in this item
+- `POST /api/withdrawals/[id]/decision` — **admin-gated** (`role = 'admin'`, 403 otherwise): `pending → approved` only — re-check `user_balances` ≥ amount, else `declined` (reason "Insufficient balance"); on approval insert the ledger row (`type: withdrawal`, −amount, `status: processed`) and set `decided_at`/`decided_by`; decline sets optional `reason`; retry-safe (failed insert leaves it `pending`)
+- Withdraw page: remove the "Process" control; list requests from `GET /api/withdrawals` with status badge + decline reason; show saved destination with change link; live remaining-balance preview stays
+- Dashboard referral cards link to `/referrals` (keeps it reachable after the Me rebuild); no admin UI in this item (that's 5.2)
+
+## 5.2 Admin Platform UI (incremental)
+Status: pending
+Goal: Give the platform admin (a `role = 'admin'` user, signed in via the normal login — see 5.1) a dedicated mobile-first area at `/admin` with its own bottom bar (Dashboard + Withdrawals). Dashboard shows platform-wide metrics; Withdrawals is the review queue where pending requests are approved or declined (consuming the admin-gated decision endpoint from 5.1). Non-admin users are redirected away from `/admin`.
+
+Scope:
+- `GET /api/admin/stats` (admin-gated): total users, total nodes, platform balance, lifetime platform revenue (`node_sale` + `platform_earnings`), pending withdrawal count, total payout requested (Σ pending `withdrawals.amount`), open jobs
+- `GET /api/admin/withdrawals` (admin-gated): all requests with requester (name/email) + destination snapshot; `?status=` filter (default pending first)
+- Admin app shell: `/admin` layout with bottom bar — Dashboard + Withdrawals only (mirrors the user shell)
+- `/admin` dashboard: metric tiles from stats
+- `/admin/withdrawals`: request list (amount, requester, destination, created) with Accept / Decline secondary buttons — green accept, red decline (decline prompts for an optional reason); consumes `POST /api/withdrawals/[id]/decision`; list refreshes after each decision
+- Guards: `/admin/*` routes require `role = 'admin'` (redirect to `/` otherwise); the platform admin keeps access to the normal user app

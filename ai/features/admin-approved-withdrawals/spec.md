@@ -1,7 +1,7 @@
 # Feature: Admin-Approved Withdrawals (roadmap 5.1)
 
 ## Purpose
-Separate withdrawal **requests** from **executed** money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — logs in as a regular user; admin auth + UI deferred) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop **at approval time**. Users never process their own withdrawals — the user-facing "Process" button is removed. Balance is re-checked at approval and the request is declined if it is no longer covered.
+Separate withdrawal **requests** from **executed** money movement. A request is a row in a new `withdrawals` table (`pending`); an approver (the platform admin — the `PLATFORM_USER_ID` account with `role = 'admin'`, signing in through the normal login; the admin *UI* is roadmap 5.2) flips it to `approved` or `declined`. Only an approval creates the ledger `withdrawal` transaction (−amount, `status: processed`), so balances drop **at approval time**. Users never process their own withdrawals — the user-facing "Process" button is removed. Balance is re-checked at approval and the request is declined if it is no longer covered.
 
 This item also turns **/me into an editable profile** (name, email, phone, bank + account number) — the destination account is captured there once and snapshotted onto each withdrawal request.
 
@@ -9,7 +9,7 @@ This item also turns **/me into an editable profile** (name, email, phone, bank 
 1. User opens **Me** → sees editable profile: name, email, phone, and account details (bank from the seeded list + account number); saves changes
 2. User opens **Withdraw** → sees available balance, enters an amount, live "balance after withdrawal" preview, and the saved destination account (read-only; link to Me to change it)
 3. Withdraw button → creates a **pending request** (snapshotting the destination account) — no money moves yet, no Process button anywhere
-4. Approver (dev tooling / later admin UI) lists pending requests and decides:
+4. Approver (the platform admin — signs in as a regular user at `platform@x034.local`) lists pending requests and decides:
    - **Approve** → balance re-checked; if covered, a ledger `withdrawal` row is created (balance drops) and the request flips to `approved`
    - **Decline** (including auto-decline when the balance no longer covers the request) → request flips to `declined` with an optional reason
 5. User sees their requests on the Withdraw page with status badges (Pending / Approved / Declined + reason when present)
@@ -24,7 +24,7 @@ This item also turns **/me into an editable profile** (name, email, phone, bank 
 - Destination account: captured on the user profile (`users.bank`, `users.account_number`) and **snapshotted** onto the `withdrawals` row (bank, account number, account name) at request time — requests are self-contained for the approver
 - A user without saved bank details gets a clear "add bank details on your profile first" error when requesting
 - Profile editing rules: name required; email/phone validated as at signup and unique (409 on conflict); bank must be a seeded `banks` id (nullable); account number digits only
-- No admin UI, no admin auth gating in this item — the decision endpoint exists and is dev-usable; admin gating lands with platform tooling
+- Admin identity: `users.role` (`user` | `admin`, default `user`); the platform account is seeded `admin` with a real password; the decision endpoint requires `role = 'admin'` (403 otherwise). No admin UI in this item — that's roadmap 5.2
 
 ## Acceptance Criteria
 - [ ] Migration 0009 applies cleanly: `withdrawals` table + legacy pending-row migration; 0001–0008 untouched
