@@ -85,6 +85,9 @@ export async function GET() {
       company: string;
       status: ReturnType<typeof deriveJobStatus>;
       estimated_earnings: number;
+      starts_at: string;
+      duration_hours: number;
+      actual_duration_hours: number | null;
     } | null = null;
 
     if (assignment && assignment.job) {
@@ -98,6 +101,9 @@ export async function GET() {
         estimated_earnings: Number(
           ((assignment.job.total_payout * dur) / assignment.job.duration_hours).toFixed(2)
         ),
+        starts_at: assignment.job.starts_at,
+        duration_hours: assignment.job.duration_hours,
+        actual_duration_hours: assignment.job.actual_duration_hours,
       };
     }
 

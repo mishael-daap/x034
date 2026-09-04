@@ -1,11 +1,11 @@
 # ============================================================
 # INPUT PARAMETERS (edit these values)
 # ============================================================
-ACTIVE_UNITS = 133              # N — current number of active units
+ACTIVE_UNITS = 100              # N — current number of active units
 ENERGY_GENERATED_PER_UNIT = 10  # E — one-time energy payout when a unit is acquired
 SCORE_PERCENTAGE = 0.20         # p — fraction of E permanently banked as score (0 to 1)
 COMMISSION_PERCENTAGE = 0.3     # c — fraction of E paid to the recruiting unit (0 to 1)
-UPKEEP_PERCENTAGE = 0.05        # u — fraction of E owed per unit, per day, as upkeep (0 to 1)
+UPKEEP_PERCENTAGE = 0.03        # u — fraction of E owed per unit, per day, as upkeep (0 to 1)
 
 
 # ============================================================

@@ -1,52 +1,42 @@
 # Business Rules
 
 ## Node Tiers
-- Tier C (Standard): 4 vCPU / 16 GB / 1 GPU / 1 Gbps, $10 equivalent.
-- Tier B (Advanced): 8 vCPU / 32 GB / 2 GPU / 2 Gbps, $50 equivalent.
-- Tier A (Top): 16 vCPU / 64 GB / 4 GPU / 4 Gbps, $100 equivalent.
-- Any tier can be purchased by paying its price — no referral requirement to unlock tiers.
-- A user must purchase a node to count as a referral for someone else.
-- A user can own nodes of multiple tiers.
+- C: 4 vCPU / 16 GB / 1 GPU / 1 Gbps — $10
+- B: 8 vCPU / 32 GB / 2 GPU / 2 Gbps — $50
+- A: 16 vCPU / 64 GB / 4 GPU / 4 Gbps — $100
+- Any tier is purchasable by anyone who pays — referrals never gate tier purchases.
+- Owning a node qualifies the owner as a referral for their referrer; a user can own multiple tiers.
 
 ## Referrals
-- Direct referrals only (no multi-level tracking).
-- A referral counts once the referred user purchases a node.
-- Referrals gate access to jobs that require n referrals (separate from the node tier requirement).
-- Referrals do NOT gate tier purchases — all tiers are available to anyone who pays.
+- Direct referrals only (no multi-level).
+- Qualifying referral = a direct referee owns ≥ 1 node; counts once, gates jobs.
+- Referral commission: referrer earns **30% of every node purchase** by a direct referee, credited immediately.
+- A purchase with no referrer pays no commission — that 30% stays with the platform.
 
 ## Jobs & Offers
-- Jobs are tiered (A/B/C) and posted by companies (simulated in Phase 1).
-- Each job has a total payout (`total_payout`, the pot — set by the company), a total work amount (`duration_hours` — how long the job takes with one node), and a fixed start time.
-- A job's total payout must be at least the platform earnings floor (so every single-node pool still satisfies the floor guarantee).
-- Each job can require a minimum number of qualifying referrals (n) to unlock. This requirement is separate from the job's tier: a C, B, or A tier job can require any number of referrals.
-- Node owners browse available jobs and choose the best offer.
+- Tiered jobs (A/B/C) posted by simulated companies.
+- Job = `total_payout` (pot, ≥ platform floor) + `duration_hours` + `starts_at` + optional referral requirement (n), independent of job tier.
 
 ## Matching & Earnings
-- A job requires a minimum node tier equal to its own tier.
-- A node can only join a job of its own tier or lower.
-- To unlock a job, the node owner must meet its referral requirement (qualifying referrals ≥ n), independent of node tier matching.
-- Both gates must be satisfied to join a job: node tier (equal or higher) and referral count (n or more).
-- Every node in a job's pool earns `total_payout ÷ pool size` (the pot split), regardless of node tier.
-- A higher-tier node on a lower-tier job earns that job's payout (no bonus).
-- A job's total payout is constant and set by the company: the pot is split among the pool — more nodes = smaller share each, faster completion.
-- The effective per-node hourly rate is derived (`total_payout ÷ duration_hours`) and is pool-independent; it is not shown to users. What varies with pool size: each node's total earnings (`total_payout ÷ pool size`) and the job's wall-clock duration (`duration_hours ÷ pool size`).
+- Joining a job requires both: node tier ≥ job tier, and qualifying referrals ≥ n.
+- Pot split equally: each pool node earns `total_payout ÷ pool size`, regardless of node tier.
+- Credited when the job completes (`starts_at` + actual duration elapsed); node returns to available after.
 
 ## Node Pool
-- A node owner can add their node to a job's pool until the job stops accepting: at capacity, or 1 hour before the job starts, whichever comes first.
-- Only node owners who meet the job's referral requirement can join its pool.
-- A job is at capacity when the pool reaches `n_max = floor(total_payout ÷ platform floor)`. The platform floor is a platform-set minimum per-node earnings guarantee (not shown to users); jobs with `total_payout < platform floor` are not allowed.
-- If a slot frees before the cutoff, the job becomes joinable again.
-- Once a job has started, nodes can no longer be added or removed.
-- Nodes cannot be removed mid-job; removal is simply blocked (no penalty mechanic).
+- Nodes join until the pool hits capacity or 1 h before `starts_at`, whichever first.
+- Capacity `n_max = floor(total_payout ÷ platform floor)` (floor = 1.0).
+- Pool locks at start — no joins or leaves after.
 
-## Earnings & Balance
-- Each pool node's earnings (`total_payout ÷ pool size`) are credited when the job completes (`starts_at` + actual duration elapsed).
-- After completion, the node returns to available status.
+## Money & Ledger
+- Transaction types: `purchase` (buyer debit), `referral` (referrer credit), `platform_earnings` (platform cut), `node_sale` (platform sale proceeds), `earnings` (job credit, available after job elapses), `withdrawal` (debit, available when processed). No `deposit`.
+- Every purchase (price P) reconciles to zero: buyer `purchase` −P; platform `node_sale` +0.5P; platform `platform_earnings` +0.2P; referrer `referral` +0.3P (only when the buyer has a referrer).
+- `node_sale` and `platform_earnings` are both credits to the platform — separate types only so each can be reported independently (node-sale revenue vs commission earnings); nothing leaves the platform's balance beyond what it pays out.
+- No referrer → the referral share stays with the platform: `platform_earnings` = +0.5P.
+- The platform is an actor — a seeded `users` row — that earns, holds a balance, and withdraws like any user.
+- No negative balances — node purchases must be paid for (payment processing is an upcoming feature).
 
 ## Withdrawals
-- A user can withdraw up to their available balance at any time.
-- Withdrawals are not capped or gated by referrals.
+- Up to available balance, any time; 2-step `pending` → `processed`; never gated by referrals.
 
-## Phase 1 Scope
-- All companies, jobs, and node "work" are simulated.
-- No real payments; test currency only.
+## Phase 1
+- Simulated companies, jobs, and node work; test currency; no real payments yet.

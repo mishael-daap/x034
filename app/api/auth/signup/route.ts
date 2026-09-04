@@ -5,6 +5,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { COOKIE_NAME, createSession, sessionCookieOptions } from "@/lib/auth/session";
 import { generateReferralCode } from "@/lib/auth/referral";
 import { sanitizeUser } from "@/lib/auth/user";
+import { PLATFORM_USER_ID } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
   let referrer: string | null = null;
   if (referralCode) {
     const res = await supabaseFetch<{ id: string }[]>(
-      `/rest/v1/users?select=id&referral_code=eq.${encodeURIComponent(referralCode)}&limit=1`
+      `/rest/v1/users?select=id&referral_code=eq.${encodeURIComponent(referralCode)}&id=neq.${PLATFORM_USER_ID}&limit=1`
     );
     if (res.status === 200 && res.data?.length) {
       referrer = res.data[0].id;
