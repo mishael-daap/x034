@@ -36,14 +36,15 @@ export function LoginForm() {
     });
 
     setLoading(false);
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
       setError(data?.error ?? "Something went wrong. Try again.");
       return;
     }
 
     markRulesOnboardingPending();
-    router.push("/");
+    // Admins land on the admin app; everyone else on their dashboard.
+    router.push(data?.user?.role === "admin" ? "/admin" : "/");
     router.refresh();
   }
 

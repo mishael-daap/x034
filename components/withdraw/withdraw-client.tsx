@@ -1,14 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowUpFromLine, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowUpFromLine, Loader2, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
+import { BankSelect } from "@/components/bank-select";
 
 type Withdrawal = {
   id: string;
@@ -21,7 +30,13 @@ type Withdrawal = {
   decided_at: string | null;
 };
 
-type Destination = { bank_name: string | null; account_number: string | null };
+type Bank = { id: string; name: string };
+
+type Destination = {
+  bank_id: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+};
 
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -37,6 +52,14 @@ export function WithdrawClient() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Bank-editor dialog state (add / change payout account right here).
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [bankOpen, setBankOpen] = useState(false);
+  const [bankId, setBankId] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankError, setBankError] = useState<string | null>(null);
+
   const load = useCallback(() => {
     Promise.all([
       fetch("/api/transactions")
@@ -48,13 +71,23 @@ export function WithdrawClient() {
       fetch("/api/me")
         .then((r) => (r.ok ? r.json() : { user: null }))
         .catch(() => ({ user: null })),
-    ]).then(([tx, w, me]) => {
+      fetch("/api/banks")
+        .then((r) => (r.ok ? r.json() : { banks: [] }))
+        .catch(() => ({ banks: [] })),
+    ]).then(([tx, w, me, b]) => {
       setBalance(tx.balance ?? 0);
       setWithdrawals(w.withdrawals ?? []);
       const u = me.user;
       setDestination(
-        u ? { bank_name: u.bank?.name ?? null, account_number: u.account_number ?? null } : null
+        u
+          ? {
+              bank_id: u.bank?.id ?? null,
+              bank_name: u.bank?.name ?? null,
+              account_number: u.account_number ?? null,
+            }
+          : null
       );
+      setBanks(b.banks ?? []);
     });
   }, []);
 
@@ -71,6 +104,42 @@ export function WithdrawClient() {
   const exceeds = amountValid && remaining < 0;
   const canWithdraw = amountValid && !exceeds && !withdrawing && balance != null;
   const hasDestination = Boolean(destination?.bank_name && destination.account_number);
+
+  function openBankEditor() {
+    setBankId(destination?.bank_id ?? "");
+    setAccountNumber(destination?.account_number ?? "");
+    setBankError(null);
+    setBankOpen(true);
+  }
+
+  async function handleSaveBank() {
+    setSavingBank(true);
+    setBankError(null);
+    const res = await fetch("/api/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bank: bankId || null,
+        account_number: accountNumber.trim() || null,
+      }),
+    });
+    setSavingBank(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setBankError(d?.error ?? "Could not save bank details.");
+      return;
+    }
+    const d = await res.json().catch(() => null);
+    const u = d?.user;
+    if (u) {
+      setDestination({
+        bank_id: u.bank?.id ?? null,
+        bank_name: u.bank?.name ?? null,
+        account_number: u.account_number ?? null,
+      });
+    }
+    setBankOpen(false);
+  }
 
   async function handleWithdraw() {
     if (!canWithdraw) return;
@@ -99,15 +168,18 @@ export function WithdrawClient() {
 
   return (
     <div className="mx-auto w-full max-w-md p-6">
-      {/* Back — icon only */}
-      <button
-        type="button"
-        onClick={() => router.back()}
-        aria-label="Go back"
-        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-5" />
-      </button>
+      {/* Back + settings */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <SettingsMenu />
+      </div>
 
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Withdraw</h1>
 
@@ -153,13 +225,13 @@ export function WithdrawClient() {
         ) : (
           <p className="text-sm text-muted-foreground">
             {amountValid
-              ? `You'll have ${money(remaining)} left after this withdrawal.`
-              : "Requests are reviewed and paid by the platform admin."}
+              ? `A 10% commission applies — you'll receive ${money((amountCents / 100) * 0.9)} in your bank.`
+              : "Requests are reviewed and paid by the platform admin (10% commission)."}
           </p>
         )}
       </div>
 
-      {/* Payout destination */}
+      {/* Payout destination — opens the bank editor as a popup */}
       {destination && (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-card px-4 py-3 ring-1 ring-foreground/10">
           <div className="min-w-0">
@@ -170,12 +242,12 @@ export function WithdrawClient() {
                 : "No payout account set"}
             </p>
           </div>
-          <Link
-            href="/me"
+          <button
+            onClick={openBankEditor}
             className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline"
           >
             {hasDestination ? "Change" : "Add"}
-          </Link>
+          </button>
         </div>
       )}
 
@@ -189,7 +261,7 @@ export function WithdrawClient() {
       </Button>
       {!hasDestination && destination && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Add your bank details on your profile before requesting a withdrawal.
+          Add your bank details before requesting a withdrawal.
         </p>
       )}
 
@@ -222,6 +294,52 @@ export function WithdrawClient() {
           ))}
         </ul>
       )}
+
+      {/* Add / change bank popup */}
+      <Dialog
+        open={bankOpen}
+        onOpenChange={(open) => {
+          if (!open) setBankOpen(false);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{hasDestination ? "Change bank details" : "Add bank details"}</DialogTitle>
+            <DialogDescription>
+              Where approved withdrawals are paid out.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="bank-dialog">Bank</Label>
+              <BankSelect id="bank-dialog" banks={banks} value={bankId} onChange={setBankId} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="bank-account">Account number</Label>
+              <Input
+                id="bank-account"
+                inputMode="numeric"
+                value={accountNumber}
+                onChange={(e) => {
+                  setAccountNumber(e.target.value);
+                  setBankError(null);
+                }}
+                placeholder="e.g. 0123456789"
+              />
+            </div>
+            {bankError && <p className="text-sm text-destructive">{bankError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBankOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveBank} disabled={savingBank}>
+              {savingBank && <Loader2 className="size-4 animate-spin" />}
+              {savingBank ? "Saving…" : "Save bank details"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

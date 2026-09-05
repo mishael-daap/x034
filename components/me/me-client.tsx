@@ -21,6 +21,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
+import { BankSelect } from "@/components/bank-select";
 
 type Profile = {
   id: string;
@@ -183,12 +185,15 @@ export function MeClient() {
   return (
     <div className="mx-auto w-full max-w-md p-6 pb-10">
       {/* Greeting */}
-      <header>
-        <p className="text-sm text-muted-foreground">Profile</p>
-        <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">
-          Hello{", "}
-          <span className="text-primary">{profile.name}</span>
-        </h1>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">Profile</p>
+          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">
+            Hello{", "}
+            <span className="text-primary">{profile.name}</span>
+          </h1>
+        </div>
+        <SettingsMenu />
       </header>
 
       {/* Wallet balance + total income */}
@@ -324,19 +329,7 @@ export function MeClient() {
           <CardContent className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="bank">Bank</Label>
-              <select
-                id="bank"
-                value={bankId}
-                onChange={(e) => setBankId(e.target.value)}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
-              >
-                <option value="">Select a bank</option>
-                {banks.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+              <BankSelect id="bank" banks={banks} value={bankId} onChange={setBankId} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="account_number">Account number</Label>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type Job = {
   id: string;
@@ -67,9 +68,12 @@ export function MarketplaceClient() {
 
   return (
     <div className="mx-auto w-full max-w-md p-4 pb-10">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
-        <p className="text-sm text-muted-foreground">Commit a node to a job and earn.</p>
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
+          <p className="text-sm text-muted-foreground">Commit a node to a job and earn.</p>
+        </div>
+        <SettingsMenu />
       </header>
 
       {jobs.length === 0 ? (

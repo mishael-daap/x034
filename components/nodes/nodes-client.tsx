@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type Assignment = {
   job_id: string;
@@ -85,19 +86,22 @@ export function NodesClient() {
 
   return (
     <div className="mx-auto w-full max-w-md p-4 pb-10">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My nodes</h1>
           <p className="text-sm text-muted-foreground">
             {nodes.length} node{nodes.length === 1 ? "" : "s"}
           </p>
         </div>
-        <Link href="/nodes/purchase">
-          <Button className="h-9">
-            <Plus />
-            Purchase
-          </Button>
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link href="/nodes/purchase">
+            <Button className="h-9">
+              <Plus />
+              Purchase
+            </Button>
+          </Link>
+          <SettingsMenu />
+        </div>
       </header>
 
       {nodes.length === 0 ? (

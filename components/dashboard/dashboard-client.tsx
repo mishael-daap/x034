@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { LogOut, Server, Settings, ShieldCheck, Wallet, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Server, Wallet } from "lucide-react";
 import { RULES_ONBOARDING_KEY } from "@/lib/onboarding";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RulesDialog } from "@/components/onboarding/rules-dialog";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type User = {
   id: string;
@@ -81,15 +80,9 @@ function greeting() {
   return "Good evening";
 }
 
-/** Settings sidebar options — extend this list as more actions arrive. */
-type MenuItem = { label: string; icon: typeof LogOut; danger?: boolean; onClick: () => void };
-
 export function Dashboard({ user }: { user: User }) {
-  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showRules, setShowRules] = useState(false);
 
@@ -142,19 +135,6 @@ export function Dashboard({ user }: { user: User }) {
     load();
   }, [load]);
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
-  }
-
-  const menu: MenuItem[] = [];
-  if (user.role === "admin") {
-    menu.push({ label: "Admin panel", icon: ShieldCheck, onClick: () => router.push("/admin") });
-  }
-  menu.push({ label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut });
-
   // Active commitments = nodes with a live assignment (occupied until its job elapses).
   const now = nowMs;
   const commitments = (data?.nodes ?? []).filter((n) => n.assignment);
@@ -187,64 +167,8 @@ export function Dashboard({ user }: { user: User }) {
           <p className="text-sm text-muted-foreground">{greeting()}</p>
           <h1 className="text-xl font-semibold tracking-tight">{user.name}</h1>
         </div>
-        <button
-          aria-label="Settings"
-          onClick={() => setSettingsOpen(true)}
-          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Settings className="size-5" />
-        </button>
+        <SettingsMenu />
       </header>
-
-      {/* Settings sidebar */}
-      <div className={cn("fixed inset-0 z-50", !settingsOpen && "pointer-events-none")}>
-        <div
-          onClick={() => setSettingsOpen(false)}
-          className={cn(
-            "absolute inset-0 bg-black/60 transition-opacity",
-            settingsOpen ? "opacity-100" : "opacity-0"
-          )}
-        />
-        <aside
-          className={cn(
-            "absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col border-l border-border bg-card p-4 shadow-2xl transition-transform duration-200",
-            settingsOpen ? "translate-x-0" : "translate-x-full"
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Settings</h2>
-            <button
-              aria-label="Close settings"
-              onClick={() => setSettingsOpen(false)}
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-          <nav className="mt-6 grid gap-1">
-            {menu.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.label}
-                  onClick={item.onClick}
-                  disabled={signingOut}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
-                    item.danger
-                      ? "text-destructive hover:bg-destructive/10"
-                      : "text-foreground hover:bg-muted"
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {signingOut && item.label === "Sign out" ? "Signing out…" : item.label}
-                </button>
-              );
-            })}
-          </nav>
-          <p className="mt-auto text-xs text-muted-foreground">More options coming soon.</p>
-        </aside>
-      </div>
 
       {/* Balance */}
       {!data ? (
@@ -356,7 +280,7 @@ export function Dashboard({ user }: { user: User }) {
         <section className="mt-8">
           <div className="rounded-xl bg-[#171717] p-4 ring-1 ring-border/50">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Compute market</h2>
+              <h2 className="text-sm font-semibold">Marketplace</h2>
               <Link
                 href="/marketplace"
                 className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"

@@ -1,8 +1,6 @@
-import { AdminWithdrawalsClient } from "@/components/admin/admin-withdrawals-client";
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Admin withdrawals" };
-
-export default function AdminWithdrawalsPage() {
-  return <AdminWithdrawalsClient />;
+/** Legacy URL — the withdrawal review queue now lives at /admin/transactions. */
+export default function AdminWithdrawalsRedirect() {
+  redirect("/admin/transactions");
 }

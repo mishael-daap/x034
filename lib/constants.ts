@@ -7,14 +7,15 @@ export const PLATFORM_EARNINGS_FLOOR = 0.1;
 // Nodes can't join a job's pool within this many hours before it starts.
 export const COMMIT_WINDOW_HOURS = 1;
 
-// Revenue & commission model: the platform is a seeded users row (migration 0006)
-// and every node purchase (price P) is split across the ledger:
-//   referrer `referral` +0.3P (only when the buyer has a referrer)
-//   platform `node_sale` +0.5P and `platform_earnings` +0.2P (+0.5P with no referrer)
+// Revenue & commission model: a node purchase (price P) debits the buyer's
+// wallet in full; the referrer earns REFERRAL_COMMISSION_SHARE (3%) of P and
+// the rest stays with the platform. Withdrawals: the user is paid
+// WITHDRAWAL_PAYOUT_SHARE (90%) of an approved request and the platform keeps
+// WITHDRAWAL_COMMISSION_SHARE (10%) in its own balance.
 export const PLATFORM_USER_ID = "00000000-0000-4000-8000-000000000001";
-export const NODE_SALE_SHARE = 0.5;
-export const PLATFORM_CUT_SHARE = 0.2;
-export const REFERRAL_COMMISSION_SHARE = 0.3;
+export const REFERRAL_COMMISSION_SHARE = 0.03;
+export const WITHDRAWAL_COMMISSION_SHARE = 0.1;
+export const WITHDRAWAL_PAYOUT_SHARE = 1 - WITHDRAWAL_COMMISSION_SHARE;
 
 // Paystack node payments (roadmap 5): prices are USD; Paystack charges NGN at
 // this fixed sandbox rate. Charged kobo = round(price × USD_TO_NGN × 100).

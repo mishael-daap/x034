@@ -11,6 +11,7 @@ type User = {
   email: string | null;
   phone: string | null;
   referral_code: string;
+  role?: string;
 };
 
 export function HomeClient() {
@@ -23,7 +24,12 @@ export function HomeClient() {
       .then((r) => (r.ok ? r.json() : { user: null }))
       .then((d) => {
         if (!ignore) {
-          document.title = d.user ? "Dashboard" : "Compute Marketplace";
+          // Admins use the admin app — keep the user app for regular users.
+          if (d.user?.role === "admin") {
+            router.replace("/admin");
+            return;
+          }
+          document.title = d.user ? "Dashboard" : "Zephyra";
           setUser(d.user ?? null);
         }
       })
@@ -33,7 +39,7 @@ export function HomeClient() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [router]);
 
   if (user === undefined) {
     return (
@@ -47,7 +53,7 @@ export function HomeClient() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6 text-center">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Compute marketplace</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Zephyra</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Own a node, earn from compute jobs.
           </p>

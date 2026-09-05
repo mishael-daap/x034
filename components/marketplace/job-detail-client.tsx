@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { lockCutoffMs } from "@/lib/jobs";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type UserNode = { id: string; tier: string; available: boolean };
 type UserCtx = { nodes: UserNode[]; committed_count: number } | null;
@@ -234,13 +235,16 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-md p-4 pb-10">
-      <Link
-        href="/marketplace"
-        aria-label="Back to marketplace"
-        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-5" />
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/marketplace"
+          aria-label="Back to marketplace"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-5" />
+        </Link>
+        <SettingsMenu />
+      </div>
 
       {/* Company + payout pot on the same level */}
       <header className="mt-3 flex items-center justify-between gap-3">

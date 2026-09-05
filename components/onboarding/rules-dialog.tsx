@@ -67,7 +67,7 @@ export function RulesDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Network className="size-5 text-primary" />
-            Welcome to Compute Marketplace
+            Welcome to Zephyra
           </DialogTitle>
           <DialogDescription>
             A quick rundown of the rules so you know exactly how to start earning.

@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
+import {
+  USD_TO_NGN,
+  WITHDRAWAL_PAYOUT_SHARE,
+} from "@/lib/constants";
+import {
+  paystackCreateRecipient,
+  paystackInitiateTransfer,
+  resolveBankCode,
+} from "@/lib/paystack";
 
 export const runtime = "nodejs";
 
@@ -17,6 +27,10 @@ type WithdrawalRow = {
   amount: number;
   status: string;
   reason: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  bank: { name: string } | null;
+  user: { id: string; name: string } | null;
 };
 
 type BalanceRow = { balance: number };
@@ -25,14 +39,17 @@ type Params = { params: Promise<{ id: string }> };
 
 /**
  * POST /api/withdrawals/[id]/decision — admin approves or declines a pending
- * withdrawal (roadmap 5.1). Admin = users.role 'admin' (the platform account).
+ * withdrawal (10% platform commission model).
  *
- * approve: re-check the requester's available balance — if it no longer covers
- *   the amount the request is declined ("Insufficient balance") with no ledger
- *   row; otherwise a ledger `withdrawal` row (−amount, processed) is created
- *   and the request flips to approved. A failed ledger insert leaves it
- *   pending so the decision can be retried.
- * decline: flips to declined with an optional reason. No money ever moves.
+ * approve (mode 'simulated' | 'paystack', default simulated):
+ *   - re-check the requester's balance still covers the amount
+ *   - paystack mode: initiate a real Paystack transfer of 90% of the request
+ *     to the user's saved bank account before anything is booked; on failure
+ *     the request stays pending (retry or switch to simulated)
+ *   - ledger `withdrawal` row (−full amount, processed)
+ *   - request flips to approved. The 90% leaves as the payout; the 10%
+ *     commission stays with the platform.
+ * decline: flips to declined with an optional reason. No money moves.
  */
 export async function POST(req: Request, { params }: Params) {
   const session = await getSessionUser();
@@ -53,13 +70,14 @@ export async function POST(req: Request, { params }: Params) {
   if (action !== "approve" && action !== "decline") {
     return json(400, { error: "action must be 'approve' or 'decline'" });
   }
+  const mode = body.mode === "paystack" ? "paystack" : "simulated";
   const reason =
     typeof body.reason === "string" && body.reason.trim()
       ? body.reason.trim().slice(0, 300)
       : null;
 
   const wRes = await supabaseFetch<WithdrawalRow[]>(
-    `/rest/v1/withdrawals?select=id,user_id,amount,status,reason&id=eq.${id}&limit=1`
+    `/rest/v1/withdrawals?select=id,user_id,amount,status,reason,account_number,account_name,bank:banks(name),user:users!withdrawals_user_id_fkey(id,name)&id=eq.${id}&limit=1`
   );
   const withdrawal = wRes.data?.[0];
   if (!withdrawal) return json(404, { error: "Withdrawal not found" });
@@ -68,6 +86,8 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const amount = Number(withdrawal.amount);
+  const payout = money(amount * WITHDRAWAL_PAYOUT_SHARE);
+  const commission = money(amount - payout);
   const decidedAt = new Date().toISOString();
   const decided = { decided_at: decidedAt, decided_by: session.sub };
 
@@ -85,6 +105,46 @@ export async function POST(req: Request, { params }: Params) {
       return decline("Insufficient balance");
     }
 
+    // ── Real bank payout (Paystack transfer) — only when asked ───────────────
+    let transfer: { reference: string; status: string } | null = null;
+    if (mode === "paystack") {
+      const bankName = withdrawal.bank?.name ?? null;
+      const bankCode = resolveBankCode(bankName);
+      const accountNumber = withdrawal.account_number?.replace(/\D/g, "") ?? "";
+      const recipientName =
+        withdrawal.account_name?.trim() || withdrawal.user?.name?.trim() || "Zephyra User";
+
+      if (!bankCode || accountNumber.length < 10) {
+        return json(400, {
+          error:
+            "Cannot pay via Paystack — the user has no supported bank/account on file. Use a simulated payout instead.",
+        });
+      }
+
+      try {
+        const recipient = await paystackCreateRecipient({
+          name: recipientName.slice(0, 200),
+          accountNumber,
+          bankCode,
+        });
+        const initiated = await paystackInitiateTransfer({
+          amountKobo: Math.round(payout * USD_TO_NGN * 100),
+          recipient: recipient.recipient_code,
+          reference: `payout_${randomUUID()}`,
+          reason: `Zephyra payout ${withdrawal.user?.name ?? ""}`.trim(),
+        });
+        transfer = { reference: initiated.reference, status: initiated.status };
+      } catch (err) {
+        return json(502, {
+          error:
+            err instanceof Error
+              ? `Paystack transfer failed: ${err.message}`
+              : "Paystack transfer failed — the request is still pending.",
+        });
+      }
+    }
+
+    // ── Book the withdrawal (user ledger −full amount) ───────────────────────
     const txRes = await supabaseFetch(`/rest/v1/transactions`, {
       method: "POST",
       headers: { Prefer: "return=representation" },
@@ -101,9 +161,21 @@ export async function POST(req: Request, { params }: Params) {
       });
     }
 
-    const upd = await patchWithdrawal({ status: "approved", ...decided });
+    const upd = await patchWithdrawal({
+      status: "approved",
+      reason:
+        transfer && mode === "paystack"
+          ? `Paid via Paystack · ref ${transfer.reference}`
+          : null,
+      ...decided,
+    });
     if (!upd) return json(502, { error: "Could not update withdrawal" });
-    return json(200, { withdrawal: upd });
+
+    return json(200, {
+      withdrawal: { ...upd, payout, commission, transfer },
+      payout,
+      commission,
+    });
   }
 
   return decline(reason ?? undefined);

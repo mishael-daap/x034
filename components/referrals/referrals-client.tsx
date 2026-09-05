@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type Referral = {
   referral_code: string;
@@ -45,15 +46,18 @@ export function ReferralsClient() {
 
   return (
     <div className="mx-auto w-full max-w-md p-6">
-      {/* Back — icon only (router.back since referrals is reachable from several screens) */}
-      <button
-        type="button"
-        onClick={() => router.back()}
-        aria-label="Go back"
-        className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-      >
-        <ArrowLeft className="size-5" />
-      </button>
+      {/* Back + settings */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Go back"
+          className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ArrowLeft className="size-5" />
+        </button>
+        <SettingsMenu />
+      </div>
 
       {!referral ? (
         <div className="mt-4 grid grid-cols-2 gap-3">

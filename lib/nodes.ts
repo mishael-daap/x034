@@ -1,10 +1,5 @@
 import { supabaseFetch } from "@/lib/supabase";
-import {
-  NODE_SALE_SHARE,
-  PLATFORM_CUT_SHARE,
-  PLATFORM_USER_ID,
-  REFERRAL_COMMISSION_SHARE,
-} from "@/lib/constants";
+import { REFERRAL_COMMISSION_SHARE } from "@/lib/constants";
 
 const money = (n: number) => Math.round(n * 100) / 100;
 
@@ -16,7 +11,7 @@ export type PurchaseSuccess = {
   node: { id: string };
   tier_code: string;
   price: number;
-  splits: { referral: number; platform_earnings: number; node_sale: number };
+  referral_earned: number;
 };
 
 export type PurchaseError = { status: number; error: string };
@@ -26,16 +21,12 @@ export type PurchaseResult =
   | { ok: false; error: PurchaseError };
 
 /**
- * Create a node for the buyer and write the full reconciling purchase split
- * (price P): buyer `purchase` −P; platform `node_sale` +0.5P and
- * `platform_earnings` +0.2P (+0.5P when the buyer has no referrer); referrer
- * `referral` +0.3P (only when the buyer has a referrer). Every row carries
- * `node` = the new node's id. On partial failure the node and any written
- * transactions are rolled back so a retry is safe.
- *
- * The balance gate stays here as an invariant (no negative balances): the
- * caller must have funded the buyer first (verified Paystack payment credits a
- * `funding` row, which makes the gate pass).
+ * Buy a node with wallet balance (price P):
+ *   buyer `purchase` −P (wallet debit, full price)
+ *   referrer `referral` +0.03P — only when the buyer has a referrer
+ * The platform keeps the rest of the price implicitly (the buyer's funds came
+ * from deposits/earnings already held by the platform). On partial failure the
+ * node and any written transactions are rolled back so a retry is safe.
  */
 export async function purchaseNode(
   userId: string,
@@ -55,7 +46,7 @@ export async function purchaseNode(
   const buyer = buyerRes.data?.[0];
   if (!buyer) return { ok: false, error: { status: 404, error: "User not found" } };
 
-  // Balance gate: purchases must be funded.
+  // Balance gate: the full price must come out of the wallet (no negative balances).
   const balanceRes = await supabaseFetch<BalanceRow[]>(
     `/rest/v1/user_balances?select=balance&user_id=eq.${userId}`
   );
@@ -81,21 +72,14 @@ export async function purchaseNode(
   }
   const node = nodeRes.data[0];
 
-  // Split math (rounded to 2dp).
-  const nodeSale = money(price * NODE_SALE_SHARE);
-  const noReferrer = !buyer.referrer;
-  const platformCut = noReferrer
-    ? money(price * (PLATFORM_CUT_SHARE + REFERRAL_COMMISSION_SHARE))
-    : money(price * PLATFORM_CUT_SHARE);
-  const referral = noReferrer ? 0 : money(price * REFERRAL_COMMISSION_SHARE);
+  // Split math: referrer keeps 3% of the price; the rest stays with the platform.
+  const referral = buyer.referrer ? money(price * REFERRAL_COMMISSION_SHARE) : 0;
 
   const rows: { user_id: string; type: string; amount: number }[] = [
     { user_id: userId, type: "purchase", amount: -money(price) },
-    { user_id: PLATFORM_USER_ID, type: "node_sale", amount: nodeSale },
-    { user_id: PLATFORM_USER_ID, type: "platform_earnings", amount: platformCut },
-    ...(noReferrer
-      ? []
-      : [{ user_id: buyer.referrer as string, type: "referral", amount: referral }]),
+    ...(buyer.referrer && referral > 0
+      ? [{ user_id: buyer.referrer as string, type: "referral", amount: referral }]
+      : []),
   ];
 
   // Write rows; roll back everything on partial failure (retry-safe).
@@ -126,7 +110,7 @@ export async function purchaseNode(
       node,
       tier_code: tier.code,
       price,
-      splits: { referral, platform_earnings: platformCut, node_sale: nodeSale },
+      referral_earned: referral,
     },
   };
 }

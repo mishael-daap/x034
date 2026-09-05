@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type Company = { id: string; name: string; open_jobs_count: number };
 
@@ -23,10 +24,13 @@ export function CompaniesClient() {
 
   return (
     <div className="mx-auto w-full max-w-md p-6">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
-        <ArrowLeft />
-        Back
-      </Button>
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
+          <ArrowLeft />
+          Back
+        </Button>
+        <SettingsMenu />
+      </div>
 
       <Card className="mt-2">
         <CardHeader>
