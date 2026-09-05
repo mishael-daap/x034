@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FieldError } from "@/components/ui/field-error";
+import { moneyError } from "@/lib/validation";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 const PRESETS = [10, 25, 50, 100, 200];
@@ -49,7 +51,8 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
   }, []);
 
   const parsed = Number(amount);
-  const amountValid = Number.isFinite(parsed) && parsed > 0;
+  const amountErr = amount.trim() ? moneyError(amount, { label: "Deposit amount" }) : null;
+  const amountValid = amountErr === null && Number.isFinite(parsed) && parsed > 0;
   const amountCents = amountValid ? Math.round(parsed * 100) : 0;
   const after = (Math.round((balance ?? 0) * 100) + amountCents) / 100;
 
@@ -207,6 +210,7 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
             </button>
           ))}
         </div>
+        <FieldError message={amountErr} />
       </div>
 
       <div className="mt-4 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">

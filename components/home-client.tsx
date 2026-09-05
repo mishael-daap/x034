@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Dashboard } from "@/components/dashboard/dashboard-client";
 
 type User = {
@@ -23,49 +22,31 @@ export function HomeClient() {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : { user: null }))
       .then((d) => {
-        if (!ignore) {
-          // Admins use the admin app — keep the user app for regular users.
-          if (d.user?.role === "admin") {
-            router.replace("/admin");
-            return;
-          }
-          document.title = d.user ? "Dashboard" : "Zephyra";
-          setUser(d.user ?? null);
+        if (ignore) return;
+        // Signed-out visitors go to the sign-in page; admins to the admin app.
+        if (!d.user) {
+          router.replace("/login");
+          return;
         }
+        if (d.user.role === "admin") {
+          router.replace("/admin");
+          return;
+        }
+        document.title = "Dashboard";
+        setUser(d.user);
       })
       .catch(() => {
-        if (!ignore) setUser(null);
+        if (!ignore) router.replace("/login");
       });
     return () => {
       ignore = true;
     };
   }, [router]);
 
-  if (user === undefined) {
+  if (!user) {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
         <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-8 p-6 text-center">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Zephyra</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Own a node, earn from compute jobs.
-          </p>
-        </div>
-        <div className="flex w-full max-w-xs flex-col gap-3">
-          <Button onClick={() => router.push("/signup")} className="h-10 w-full">
-            Create account
-          </Button>
-          <Button variant="outline" onClick={() => router.push("/login")} className="h-10 w-full">
-            Sign in
-          </Button>
-        </div>
       </div>
     );
   }

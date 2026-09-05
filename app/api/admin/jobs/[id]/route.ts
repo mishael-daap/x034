@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
-import { PLATFORM_EARNINGS_FLOOR } from "@/lib/constants";
+import {
+  decimalError,
+  startsAtError,
+  wholeNumberError,
+  JOB_DURATION_MAX,
+  JOB_DURATION_MIN,
+  JOB_PAYOUT_MAX,
+  JOB_PAYOUT_MIN,
+} from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -10,24 +18,10 @@ function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-const money = (n: number) => Math.round(n * 100) / 100;
-
-type JobRow = {
-  id: string;
-  starts_at: string;
-  status: string;
-};
-
+type JobRow = { id: string; starts_at: string; status: string };
 type CountRow = { count: number };
 
 type Params = { params: Promise<{ id: string }> };
-
-function readNumber(body: Record<string, unknown>, key: string, min: number): number | null {
-  if (!(key in body)) return null;
-  const n = Number(body[key]);
-  if (!Number.isFinite(n) || n < min) return null;
-  return money(n);
-}
 
 /**
  * PATCH /api/admin/jobs/[id] — edit an upcoming job (not yet started).
@@ -59,24 +53,51 @@ export async function PATCH(req: Request, { params }: Params) {
     return json(400, { error: "Invalid request body" });
   }
 
+  const str = (v: unknown) => (v == null ? "" : String(v));
   const updates: Record<string, unknown> = {};
-  if (typeof body.company_id === "string" && body.company_id.trim()) {
-    updates.company = body.company_id.trim();
+
+  if ("company_id" in body) {
+    const v = str(body.company_id).trim();
+    if (!v) return json(400, { error: "Select a company" });
+    updates.company = v;
   }
-  if (typeof body.tier_id === "string" && body.tier_id.trim()) {
-    updates.min_tier = body.tier_id.trim();
+  if ("tier_id" in body) {
+    const v = str(body.tier_id).trim();
+    if (!v) return json(400, { error: "Select a node option" });
+    updates.min_tier = v;
   }
-  if (typeof body.starts_at === "string" && body.starts_at.trim()) {
-    const t = Date.parse(body.starts_at);
-    if (Number.isNaN(t)) return json(400, { error: "starts_at is invalid" });
-    updates.starts_at = new Date(t).toISOString();
+  if ("total_payout" in body) {
+    const err = decimalError(str(body.total_payout), {
+      label: "Payout pot",
+      min: JOB_PAYOUT_MIN,
+      max: JOB_PAYOUT_MAX,
+    });
+    if (err) return json(400, { error: err });
+    updates.total_payout = Math.round(Number(body.total_payout) * 100) / 100;
   }
-  const payout = readNumber(body, "total_payout", PLATFORM_EARNINGS_FLOOR);
-  if (payout !== null) updates.total_payout = payout;
-  const duration = readNumber(body, "duration_hours", 0.1);
-  if (duration !== null) updates.duration_hours = duration;
-  const referrals = readNumber(body, "required_referrals", 0);
-  if (referrals !== null) updates.required_referrals = referrals;
+  if ("duration_hours" in body) {
+    const err = decimalError(str(body.duration_hours), {
+      label: "Duration",
+      min: JOB_DURATION_MIN,
+      max: JOB_DURATION_MAX,
+    });
+    if (err) return json(400, { error: err });
+    updates.duration_hours = Number(body.duration_hours);
+  }
+  if ("required_referrals" in body) {
+    const err = wholeNumberError(str(body.required_referrals), {
+      label: "Referrals required",
+      min: 0,
+    });
+    if (err) return json(400, { error: err });
+    updates.required_referrals = Number(body.required_referrals);
+  }
+  if ("starts_at" in body) {
+    const v = str(body.starts_at).trim();
+    const err = startsAtError(v);
+    if (err) return json(400, { error: err });
+    updates.starts_at = new Date(v).toISOString();
+  }
 
   if (Object.keys(updates).length === 0) {
     return json(400, { error: "Nothing to update" });

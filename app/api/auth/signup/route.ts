@@ -6,11 +6,9 @@ import { COOKIE_NAME, createSession, sessionCookieOptions } from "@/lib/auth/ses
 import { generateReferralCode } from "@/lib/auth/referral";
 import { sanitizeUser } from "@/lib/auth/user";
 import { PLATFORM_USER_ID } from "@/lib/constants";
+import { emailError, nameError, passwordError, phoneError } from "@/lib/validation";
 
 export const runtime = "nodejs";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^\+?[0-9]{7,15}$/;
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
@@ -39,11 +37,14 @@ export async function POST(req: Request) {
     typeof body.referral_code === "string" ? body.referral_code.trim().toUpperCase() : "";
 
   if (!name) return json(400, { error: "Name is required" });
-  if (password.length < 6) return json(400, { error: "Password must be at least 6 characters" });
-  if (!email) return json(400, { error: "Email is required" });
-  if (!phone) return json(400, { error: "Phone number is required" });
-  if (!EMAIL_RE.test(email)) return json(400, { error: "Enter a valid email" });
-  if (!PHONE_RE.test(phone)) return json(400, { error: "Enter a valid phone number" });
+  const nameErr = nameError(name);
+  if (nameErr) return json(400, { error: nameErr });
+  const passErr = passwordError(password);
+  if (passErr) return json(400, { error: passErr });
+  const emailErr = emailError(email);
+  if (emailErr) return json(400, { error: emailErr });
+  const phoneErr = phoneError(phone);
+  if (phoneErr) return json(400, { error: phoneErr });
 
   // Resolve optional referrer
   let referrer: string | null = null;

@@ -233,6 +233,10 @@ export function AdminTransactionsClient() {
                       onValueChange={(v) =>
                         setModes((m) => ({ ...m, [w.id]: v as PayoutMode }))
                       }
+                      items={[
+                        { value: "simulated", label: "Simulated payout (test)" },
+                        { value: "paystack", label: "Real payout via Paystack" },
+                      ]}
                     >
                       <SelectTrigger className="w-full" aria-label="Payout mode">
                         <SelectValue />

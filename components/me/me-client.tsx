@@ -23,6 +23,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 import { BankSelect } from "@/components/bank-select";
+import { FieldError } from "@/components/ui/field-error";
+import { accountNumberError, emailError, nameError, phoneError } from "@/lib/validation";
 
 type Profile = {
   id: string;
@@ -60,6 +62,9 @@ export function MeClient() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [errors, setErrors] = useState<
+    Partial<Record<"name" | "email" | "phone" | "account_number", string>>
+  >({});
 
   // Editable field state (initialised once the profile loads).
   const [name, setName] = useState("");
@@ -124,7 +129,20 @@ export function MeClient() {
     }
   }
 
+  function clearField(field: "name" | "email" | "phone" | "account_number") {
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  }
+
   async function handleSave() {
+    const next = {
+      name: nameError(name) ?? undefined,
+      email: emailError(email) ?? undefined,
+      phone: phoneError(phone) ?? undefined,
+      account_number: accountNumberError(accountNumber) ?? undefined,
+    };
+    setErrors(next);
+    if (Object.values(next).some(Boolean)) return;
+
     setSaving(true);
     setError(null);
     setSaved(false);
@@ -280,6 +298,7 @@ export function MeClient() {
           e.preventDefault();
           handleSave();
         }}
+        noValidate
         className="mt-8 grid gap-4"
       >
         <Card>
@@ -292,7 +311,8 @@ export function MeClient() {
           <CardContent className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="name">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+              <Input id="name" value={name} onChange={(e) => { setName(e.target.value); clearField("name"); }} />
+              <FieldError message={errors.name} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="email">Email</Label>
@@ -300,10 +320,10 @@ export function MeClient() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                onChange={(e) => { setEmail(e.target.value); clearField("email"); }}
                 autoComplete="email"
               />
+              <FieldError message={errors.email} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="phone">Phone</Label>
@@ -311,10 +331,10 @@ export function MeClient() {
                 id="phone"
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
+                onChange={(e) => { setPhone(e.target.value); clearField("phone"); }}
                 autoComplete="tel"
               />
+              <FieldError message={errors.phone} />
             </div>
           </CardContent>
         </Card>
@@ -336,10 +356,12 @@ export function MeClient() {
               <Input
                 id="account_number"
                 inputMode="numeric"
+                maxLength={10}
                 value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
+                onChange={(e) => { setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 10)); clearField("account_number"); }}
                 placeholder="e.g. 0123456789"
               />
+              <FieldError message={errors.account_number} />
             </div>
           </CardContent>
         </Card>

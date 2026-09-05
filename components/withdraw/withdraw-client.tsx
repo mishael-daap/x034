@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 import { BankSelect } from "@/components/bank-select";
+import { FieldError } from "@/components/ui/field-error";
+import { accountNumberError, moneyError } from "@/lib/validation";
 
 type Withdrawal = {
   id: string;
@@ -97,13 +99,25 @@ export function WithdrawClient() {
 
   // Live "what's left" math: balance − requested amount, rounded to cents.
   const parsed = Number(amount);
-  const amountValid = Number.isFinite(parsed) && parsed > 0;
+  const amountErr = amount.trim() ? moneyError(amount, { label: "Withdrawal amount" }) : null;
+  const amountValid = amountErr === null && Number.isFinite(parsed) && parsed > 0;
   const cents = Math.round((balance ?? 0) * 100);
   const amountCents = amountValid ? Math.round(parsed * 100) : 0;
   const remaining = (cents - amountCents) / 100;
   const exceeds = amountValid && remaining < 0;
   const canWithdraw = amountValid && !exceeds && !withdrawing && balance != null;
   const hasDestination = Boolean(destination?.bank_name && destination.account_number);
+
+  // Bank dialog: require a bank + valid 10-digit account, or both empty (clear).
+  const acctErr = accountNumberError(accountNumber, { required: !!bankId }) ?? undefined;
+  const bankNeeded = !bankId && accountNumber.trim().length > 0 ? "Select a bank" : undefined;
+  const bankHint =
+    accountNumber.trim() && !bankId
+      ? "Pick the bank for this account number"
+      : bankId && !accountNumber.trim()
+        ? "Enter the 10-digit account number"
+        : undefined;
+  const canSaveBank = (bankId && !acctErr) || (!bankId && !accountNumber.trim());
 
   function openBankEditor() {
     setBankId(destination?.bank_id ?? "");
@@ -113,6 +127,7 @@ export function WithdrawClient() {
   }
 
   async function handleSaveBank() {
+    if (!canSaveBank) return;
     setSavingBank(true);
     setBankError(null);
     const res = await fetch("/api/me", {
@@ -220,6 +235,8 @@ export function WithdrawClient() {
           <p className="text-sm text-destructive">
             Amount exceeds your available balance ({money(cents / 100)}).
           </p>
+        ) : amountErr ? (
+          <p className="text-sm text-destructive">{amountErr}</p>
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : (
@@ -312,28 +329,32 @@ export function WithdrawClient() {
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="bank-dialog">Bank</Label>
-              <BankSelect id="bank-dialog" banks={banks} value={bankId} onChange={setBankId} />
+              <BankSelect id="bank-dialog" banks={banks} value={bankId} onChange={(v) => { setBankId(v); setBankError(null); }} />
+              {bankNeeded && <FieldError message={bankNeeded} />}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="bank-account">Account number</Label>
               <Input
                 id="bank-account"
                 inputMode="numeric"
+                maxLength={10}
                 value={accountNumber}
                 onChange={(e) => {
-                  setAccountNumber(e.target.value);
+                  setAccountNumber(e.target.value.replace(/\D/g, "").slice(0, 10));
                   setBankError(null);
                 }}
-                placeholder="e.g. 0123456789"
+                placeholder="10-digit account number"
               />
+              <FieldError message={acctErr} />
             </div>
+            {bankHint && <p className="text-sm text-muted-foreground">{bankHint}</p>}
             {bankError && <p className="text-sm text-destructive">{bankError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBankOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveBank} disabled={savingBank}>
+            <Button onClick={handleSaveBank} disabled={savingBank || !canSaveBank}>
               {savingBank && <Loader2 className="size-4 animate-spin" />}
               {savingBank ? "Saving…" : "Save bank details"}
             </Button>

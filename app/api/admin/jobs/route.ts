@@ -2,15 +2,21 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
-import { PLATFORM_EARNINGS_FLOOR } from "@/lib/constants";
+import {
+  decimalError,
+  startsAtError,
+  wholeNumberError,
+  JOB_DURATION_MAX,
+  JOB_DURATION_MIN,
+  JOB_PAYOUT_MAX,
+  JOB_PAYOUT_MIN,
+} from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
-
-const money = (n: number) => Math.round(n * 100) / 100;
 
 type JobRow = {
   id: string;
@@ -25,7 +31,7 @@ type JobRow = {
 
 const JOB_SELECT = `id,company:companies(id,name),min_tier:node_tiers(id,code,name),total_payout,duration_hours,starts_at,required_referrals,status`;
 
-/** GET /api/admin/jobs — all jobs (any status), newest starts first. */
+/** GET /api/admin/jobs — all jobs (any status), ordered by start time. */
 export async function GET() {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
@@ -71,23 +77,26 @@ export async function POST(req: Request) {
   const companyId = typeof body.company_id === "string" ? body.company_id.trim() : "";
   const tierId = typeof body.tier_id === "string" ? body.tier_id.trim() : "";
   const startsAt = typeof body.starts_at === "string" ? body.starts_at.trim() : "";
-  const num = (key: string, min: number): number => {
-    const n = Number(body[key]);
-    if (!Number.isFinite(n) || n < min) throw new Error(`${key} must be at least ${min}`);
-    return money(n);
-  };
+  const str = (v: unknown) => (v == null ? "" : String(v));
 
-  let payout: number, duration: number, referrals: number;
-  try {
-    if (!companyId) throw new Error("company_id is required");
-    if (!tierId) throw new Error("tier_id is required");
-    if (!startsAt || Number.isNaN(Date.parse(startsAt))) throw new Error("starts_at is invalid");
-    payout = num("total_payout", PLATFORM_EARNINGS_FLOOR);
-    duration = num("duration_hours", 0.1);
-    referrals = num("required_referrals", 0);
-  } catch (err) {
-    return json(400, { error: err instanceof Error ? err.message : "Invalid job fields" });
-  }
+  const checks: (string | null)[] = [
+    companyId ? null : "Select a company",
+    tierId ? null : "Select a node option",
+    decimalError(str(body.total_payout), {
+      label: "Payout pot",
+      min: JOB_PAYOUT_MIN,
+      max: JOB_PAYOUT_MAX,
+    }),
+    decimalError(str(body.duration_hours), {
+      label: "Duration",
+      min: JOB_DURATION_MIN,
+      max: JOB_DURATION_MAX,
+    }),
+    wholeNumberError(str(body.required_referrals), { label: "Referrals required", min: 0 }),
+    startsAtError(startsAt),
+  ];
+  const firstError = checks.find((c): c is string => c !== null);
+  if (firstError) return json(400, { error: firstError });
 
   const res = await supabaseFetch<JobRow[]>(`/rest/v1/jobs?select=id`, {
     method: "POST",
@@ -95,17 +104,18 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       company: companyId,
       min_tier: tierId,
-      total_payout: payout,
-      duration_hours: duration,
+      total_payout: Math.round(Number(body.total_payout) * 100) / 100,
+      duration_hours: Number(body.duration_hours),
       starts_at: new Date(startsAt).toISOString(),
-      required_referrals: referrals,
+      required_referrals: Number(body.required_referrals),
       status: "open",
     }),
   });
 
   if (res.status !== 201 || !res.data?.[0]) {
     const msg =
-      (res.error ?? "").includes("jobs_company_fkey") || (res.error ?? "").includes("jobs_min_tier_fkey")
+      (res.error ?? "").includes("jobs_company_fkey") ||
+      (res.error ?? "").includes("jobs_min_tier_fkey")
         ? "Pick a valid company and node option"
         : res.error ?? "Could not create job";
     return json(res.status, { error: msg });

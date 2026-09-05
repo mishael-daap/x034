@@ -30,6 +30,10 @@ export function BankSelect({
     <Select
       value={value || "none"}
       onValueChange={(v) => onChange(v === "none" ? "" : (v as string))}
+      items={[
+        ...banks.map((b) => ({ value: b.id, label: b.name })),
+        { value: "none", label: "No bank (clear)" },
+      ]}
     >
       <SelectTrigger id={id} className="w-full">
         <SelectValue placeholder="Select a bank" />

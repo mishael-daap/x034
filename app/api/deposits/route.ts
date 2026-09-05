@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
+import { moneyError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -27,12 +28,11 @@ export async function POST(req: Request) {
     return json(400, { error: "Invalid request body" });
   }
 
-  const parsed = Number(body.amount);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return json(400, { error: "Enter a deposit amount greater than zero" });
-  }
-  const amount = Math.round(parsed * 100) / 100;
-  if (amount <= 0) return json(400, { error: "Enter a deposit amount greater than zero" });
+  const amountStr = typeof body.amount === "string" ? body.amount : String(body.amount ?? "");
+  const amountErr = moneyError(amountStr, { label: "Deposit amount" });
+  if (amountErr) return json(400, { error: amountErr });
+  const amount = Math.round(Number(amountStr) * 100) / 100;
+  if (amount <= 0) return json(400, { error: moneyError(amountStr, { label: "Deposit amount" }) ?? "Enter a deposit amount" });
 
   const res = await supabaseFetch(`/rest/v1/transactions`, {
     method: "POST",

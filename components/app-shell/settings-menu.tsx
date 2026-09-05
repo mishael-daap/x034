@@ -13,7 +13,7 @@ export function SettingsMenu() {
   async function handleSignOut() {
     setSigningOut(true);
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
+    router.push("/login");
     router.refresh();
   }
 

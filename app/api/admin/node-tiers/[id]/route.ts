@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
+import { decimalError, nodeCodeError, shortLabelError, wholeNumberError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -9,20 +10,11 @@ function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-const money = (n: number) => Math.round(n * 100) / 100;
-
 type CountRow = { count: number };
 
 type Params = { params: Promise<{ id: string }> };
 
-function readNumber(body: Record<string, unknown>, key: string, min: number): number | null {
-  if (!(key in body)) return null;
-  const n = Number(body[key]);
-  if (!Number.isFinite(n) || n < min) return null;
-  return money(n);
-}
-
-/** PATCH /api/admin/node-tiers/[id] — edit a node option. */
+/** PATCH /api/admin/node-tiers/[id] — edit a node option (admin only). */
 export async function PATCH(req: Request, { params }: Params) {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
@@ -39,22 +31,36 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const updates: Record<string, unknown> = {};
-  if (typeof body.code === "string" && body.code.trim()) {
-    const code = body.code.trim().toUpperCase();
-    if (code.length > 8) return json(400, { error: "Code must be 8 characters or fewer" });
-    updates.code = code;
+  const str = (v: unknown) => (v == null ? "" : String(v));
+
+  if ("code" in body) {
+    const err = nodeCodeError(str(body.code));
+    if (err) return json(400, { error: err });
+    updates.code = str(body.code).trim().toUpperCase();
   }
-  if (typeof body.name === "string" && body.name.trim()) updates.name = body.name.trim();
-  const vcpu = readNumber(body, "vcpu", 0);
-  if (vcpu !== null) updates.vcpu = vcpu;
-  const ramGb = readNumber(body, "ram_gb", 0);
-  if (ramGb !== null) updates.ram_gb = ramGb;
-  const gpu = readNumber(body, "gpu", 0);
-  if (gpu !== null) updates.gpu = gpu;
-  const bandwidth = readNumber(body, "bandwidth", 0);
-  if (bandwidth !== null) updates.bandwidth = bandwidth;
-  const price = readNumber(body, "price", 0.01);
-  if (price !== null) updates.price = price;
+  if ("name" in body) {
+    const err = shortLabelError(str(body.name), "Name");
+    if (err) return json(400, { error: err });
+    updates.name = str(body.name).trim();
+  }
+  const specFields: [string, string, number][] = [
+    ["vcpu", "vCPU", 10_000],
+    ["ram_gb", "RAM", 1_000_000],
+    ["gpu", "GPU", 1_000],
+    ["bandwidth", "Bandwidth", 100_000],
+  ];
+  for (const [key, label, max] of specFields) {
+    if (key in body) {
+      const err = wholeNumberError(str(body[key]), { label, max });
+      if (err) return json(400, { error: err });
+      updates[key] = Number(body[key]);
+    }
+  }
+  if ("price" in body) {
+    const err = decimalError(str(body.price), { label: "Price", min: 0.01, max: 100_000 });
+    if (err) return json(400, { error: err });
+    updates.price = Math.round(Number(body.price) * 100) / 100;
+  }
 
   if (Object.keys(updates).length === 0) {
     return json(400, { error: "Nothing to update" });

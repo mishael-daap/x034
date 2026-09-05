@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
+import { decimalError, nodeCodeError, shortLabelError, wholeNumberError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
-
-const money = (n: number) => Math.round(n * 100) / 100;
 
 type TierRow = {
   id: string;
@@ -38,11 +37,36 @@ export async function GET() {
   return json(200, { tiers: res.data ?? [] });
 }
 
-function readNumber(body: Record<string, unknown>, key: string, min: number): number | null {
-  if (!(key in body)) return null;
-  const n = Number(body[key]);
-  if (!Number.isFinite(n) || n < min) return null;
-  return money(n);
+function validateTier(
+  body: Record<string, unknown>
+): { error: string } | { values: Record<string, unknown> } {
+  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const str = (v: unknown) => (v == null ? "" : String(v));
+
+  const checks: (string | null)[] = [
+    nodeCodeError(code),
+    shortLabelError(name, "Name"),
+    wholeNumberError(str(body.vcpu), { label: "vCPU", max: 10_000 }),
+    wholeNumberError(str(body.ram_gb), { label: "RAM", max: 1_000_000 }),
+    wholeNumberError(str(body.gpu), { label: "GPU", max: 1_000 }),
+    wholeNumberError(str(body.bandwidth), { label: "Bandwidth", max: 100_000 }),
+    decimalError(str(body.price), { label: "Price", min: 0.01, max: 100_000 }),
+  ];
+  const firstError = checks.find((c): c is string => c !== null);
+  if (firstError) return { error: firstError };
+
+  return {
+    values: {
+      code,
+      name,
+      vcpu: Number(body.vcpu),
+      ram_gb: Number(body.ram_gb),
+      gpu: Number(body.gpu),
+      bandwidth: Number(body.bandwidth),
+      price: Math.round(Number(body.price) * 100) / 100,
+    },
+  };
 }
 
 /** POST /api/admin/node-tiers — add a new purchasable node option. */
@@ -59,24 +83,13 @@ export async function POST(req: Request) {
     return json(400, { error: "Invalid request body" });
   }
 
-  const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  const vcpu = readNumber(body, "vcpu", 0);
-  const ramGb = readNumber(body, "ram_gb", 0);
-  const gpu = readNumber(body, "gpu", 0);
-  const bandwidth = readNumber(body, "bandwidth", 0);
-  const price = readNumber(body, "price", 0.01);
-
-  if (!code || !name) return json(400, { error: "code and name are required" });
-  if (code.length > 8) return json(400, { error: "Code must be 8 characters or fewer" });
-  if (vcpu === null || ramGb === null || gpu === null || bandwidth === null || price === null) {
-    return json(400, { error: "Specs and price must be non-negative numbers" });
-  }
+  const result = validateTier(body);
+  if ("error" in result) return json(400, { error: result.error });
 
   const res = await supabaseFetch<TierRow[]>(`/rest/v1/node_tiers?select=id`, {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ code, name, vcpu, ram_gb: ramGb, gpu, bandwidth, price }),
+    body: JSON.stringify(result.values),
   });
   if (res.status !== 201) {
     const msg = (res.error ?? "").includes("node_tiers_code_key")

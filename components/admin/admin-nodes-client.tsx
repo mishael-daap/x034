@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
+import { FieldError } from "@/components/ui/field-error";
+import { decimalError, nodeCodeError, shortLabelError, wholeNumberError } from "@/lib/validation";
 
 type Tier = {
   id: string;
@@ -40,6 +42,10 @@ type FormState = {
   price: string;
 };
 
+type FormErrors = Partial<
+  Record<"code" | "name" | "vcpu" | "ram_gb" | "gpu" | "bandwidth" | "price", string>
+>;
+
 const emptyForm = (): FormState => ({
   code: "",
   name: "",
@@ -53,6 +59,7 @@ const emptyForm = (): FormState => ({
 export function AdminNodesClient() {
   const [tiers, setTiers] = useState<Tier[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [editor, setEditor] = useState<{ tier: Tier | null; form: FormState } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Tier | null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,11 +78,13 @@ export function AdminNodesClient() {
 
   function openCreate() {
     setError(null);
+    setFormErrors({});
     setEditor({ tier: null, form: emptyForm() });
   }
 
   function openEdit(t: Tier) {
     setError(null);
+    setFormErrors({});
     setEditor({
       tier: t,
       form: {
@@ -90,8 +99,28 @@ export function AdminNodesClient() {
     });
   }
 
+  function patchForm(patch: Partial<FormState>) {
+    setEditor((prev) => (prev ? { ...prev, form: { ...prev.form, ...patch } } : prev));
+    setFormErrors({});
+  }
+
   async function handleSave() {
     if (!editor) return;
+
+    const f = editor.form;
+    const next: FormErrors = {
+      code: nodeCodeError(f.code) ?? undefined,
+      name: shortLabelError(f.name, "Name") ?? undefined,
+      vcpu: wholeNumberError(f.vcpu, { label: "vCPU", max: 10_000 }) ?? undefined,
+      ram_gb: wholeNumberError(f.ram_gb, { label: "RAM", max: 1_000_000 }) ?? undefined,
+      gpu: wholeNumberError(f.gpu, { label: "GPU", max: 1_000 }) ?? undefined,
+      bandwidth: wholeNumberError(f.bandwidth, { label: "Bandwidth", max: 100_000 }) ?? undefined,
+      price: decimalError(f.price, { label: "Price", min: 0.01, max: 100_000 }) ?? undefined,
+    };
+    setFormErrors(next);
+    if (Object.values(next).some(Boolean)) return;
+    setFormErrors({});
+
     setSaving(true);
     setError(null);
     const tier = editor.tier;
@@ -101,13 +130,13 @@ export function AdminNodesClient() {
       method: isEdit ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        code: editor.form.code,
-        name: editor.form.name,
-        vcpu: Number(editor.form.vcpu),
-        ram_gb: Number(editor.form.ram_gb),
-        gpu: Number(editor.form.gpu),
-        bandwidth: Number(editor.form.bandwidth),
-        price: Number(editor.form.price),
+        code: f.code.trim().toUpperCase(),
+        name: f.name.trim(),
+        vcpu: Number(f.vcpu),
+        ram_gb: Number(f.ram_gb),
+        gpu: Number(f.gpu),
+        bandwidth: Number(f.bandwidth),
+        price: Number(f.price),
       }),
     });
     setSaving(false);
@@ -142,8 +171,8 @@ export function AdminNodesClient() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Nodes</h1>
           <p className="text-sm text-muted-foreground">
-            Node options users can buy — create, edit and remove. Changes show up
-            instantly on the user purchase page.
+            Node options users can buy — create, edit and remove. Changes show up instantly on
+            the user purchase page.
           </p>
         </div>
         <SettingsMenu />
@@ -162,9 +191,7 @@ export function AdminNodesClient() {
           <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       ) : tiers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No node options yet. Create the first one.
-        </p>
+        <p className="text-sm text-muted-foreground">No node options yet. Create the first one.</p>
       ) : (
         <div className="grid gap-3">
           {tiers.map((t) => (
@@ -237,22 +264,24 @@ export function AdminNodesClient() {
                     id="nt-code"
                     value={editor.form.code}
                     onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, code: e.target.value } })
+                      patchForm({
+                        code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8),
+                      })
                     }
                     placeholder="e.g. D"
-                    maxLength={8}
                   />
+                  <FieldError message={formErrors.code} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="nt-name">Name</Label>
                   <Input
                     id="nt-name"
                     value={editor.form.name}
-                    onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, name: e.target.value } })
-                    }
+                    onChange={(e) => patchForm({ name: e.target.value })}
                     placeholder="e.g. Ultimate"
+                    maxLength={40}
                   />
+                  <FieldError message={formErrors.name} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -260,27 +289,21 @@ export function AdminNodesClient() {
                   <Label htmlFor="nt-vcpu">vCPU</Label>
                   <Input
                     id="nt-vcpu"
-                    type="number"
-                    min="0"
-                    step="1"
+                    inputMode="numeric"
                     value={editor.form.vcpu}
-                    onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, vcpu: e.target.value } })
-                    }
+                    onChange={(e) => patchForm({ vcpu: e.target.value.replace(/\D/g, "") })}
                   />
+                  <FieldError message={formErrors.vcpu} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="nt-ram">RAM (GB)</Label>
                   <Input
                     id="nt-ram"
-                    type="number"
-                    min="0"
-                    step="1"
+                    inputMode="numeric"
                     value={editor.form.ram_gb}
-                    onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, ram_gb: e.target.value } })
-                    }
+                    onChange={(e) => patchForm({ ram_gb: e.target.value.replace(/\D/g, "") })}
                   />
+                  <FieldError message={formErrors.ram_gb} />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -288,43 +311,31 @@ export function AdminNodesClient() {
                   <Label htmlFor="nt-gpu">GPU</Label>
                   <Input
                     id="nt-gpu"
-                    type="number"
-                    min="0"
-                    step="1"
+                    inputMode="numeric"
                     value={editor.form.gpu}
-                    onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, gpu: e.target.value } })
-                    }
+                    onChange={(e) => patchForm({ gpu: e.target.value.replace(/\D/g, "") })}
                   />
+                  <FieldError message={formErrors.gpu} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="nt-bw">Gbps</Label>
                   <Input
                     id="nt-bw"
-                    type="number"
-                    min="0"
-                    step="1"
+                    inputMode="numeric"
                     value={editor.form.bandwidth}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        form: { ...editor.form, bandwidth: e.target.value },
-                      })
-                    }
+                    onChange={(e) => patchForm({ bandwidth: e.target.value.replace(/\D/g, "") })}
                   />
+                  <FieldError message={formErrors.bandwidth} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="nt-price">Price ($)</Label>
                   <Input
                     id="nt-price"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
+                    inputMode="decimal"
                     value={editor.form.price}
-                    onChange={(e) =>
-                      setEditor({ ...editor, form: { ...editor.form, price: e.target.value } })
-                    }
+                    onChange={(e) => patchForm({ price: e.target.value })}
                   />
+                  <FieldError message={formErrors.price} />
                 </div>
               </div>
             </div>

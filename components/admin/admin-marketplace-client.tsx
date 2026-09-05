@@ -23,6 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FieldError } from "@/components/ui/field-error";
+import {
+  decimalError,
+  requiredSelectError,
+  startsAtError,
+  wholeNumberError,
+} from "@/lib/validation";
 
 type AdminJob = {
   id: string;
@@ -80,11 +87,24 @@ const STATUS_BADGE: Record<string, "default" | "outline" | "secondary"> = {
   cancelled: "outline",
 };
 
+type JobErrors = Partial<
+  Record<
+    | "company_id"
+    | "tier_id"
+    | "total_payout"
+    | "duration_hours"
+    | "required_referrals"
+    | "starts_at",
+    string
+  >
+>;
+
 export function AdminMarketplaceClient() {
   const [jobs, setJobs] = useState<AdminJob[] | null>(null);
   const [companies, setCompanies] = useState<Option[]>([]);
   const [tiers, setTiers] = useState<TierOption[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<JobErrors>({});
   const [editor, setEditor] = useState<{ job: AdminJob | null; form: FormState } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminJob | null>(null);
   const [saving, setSaving] = useState(false);
@@ -130,6 +150,32 @@ export function AdminMarketplaceClient() {
 
   async function handleSave() {
     if (!editor) return;
+
+    const f = editor.form;
+    const next: JobErrors = {
+      company_id: requiredSelectError("a company", f.company_id) ?? undefined,
+      tier_id: requiredSelectError("a node option", f.tier_id) ?? undefined,
+      total_payout: decimalError(f.total_payout, {
+        label: "Payout pot",
+        min: 0.1,
+        max: 1_000_000,
+      }) ?? undefined,
+      duration_hours: decimalError(f.duration_hours, {
+        label: "Duration",
+        min: 0.1,
+        max: 24 * 30,
+      }) ?? undefined,
+      required_referrals: wholeNumberError(f.required_referrals, {
+        label: "Referrals required",
+        min: 0,
+        max: 1_000_000,
+      }) ?? undefined,
+      starts_at: startsAtError(f.starts_at) ?? undefined,
+    };
+    setFormErrors(next);
+    if (Object.values(next).some(Boolean)) return;
+    setFormErrors({});
+
     setSaving(true);
     setError(null);
     const job = editor.job;
@@ -279,9 +325,13 @@ export function AdminMarketplaceClient() {
                 <Label htmlFor="aj-company">Company</Label>
                 <Select
                   value={editor.form.company_id || null}
-                  onValueChange={(v) =>
-                    setEditor({ ...editor, form: { ...editor.form, company_id: v as string } })
-                  }
+                  onValueChange={(v) => {
+                    setEditor((prev) =>
+                      prev ? { ...prev, form: { ...prev.form, company_id: v as string } } : prev
+                    );
+                    setFormErrors({});
+                  }}
+                  items={companies.map((c) => ({ value: c.id, label: c.name }))}
                 >
                   <SelectTrigger id="aj-company" className="w-full">
                     <SelectValue placeholder="Select a company" />
@@ -294,14 +344,22 @@ export function AdminMarketplaceClient() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError message={formErrors.company_id} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="aj-tier">Minimum node option</Label>
                 <Select
                   value={editor.form.tier_id || null}
-                  onValueChange={(v) =>
-                    setEditor({ ...editor, form: { ...editor.form, tier_id: v as string } })
-                  }
+                  onValueChange={(v) => {
+                    setEditor((prev) =>
+                      prev ? { ...prev, form: { ...prev.form, tier_id: v as string } } : prev
+                    );
+                    setFormErrors({});
+                  }}
+                  items={tiers.map((t) => ({
+                    value: t.id,
+                    label: `Tier ${t.code} · ${t.name}`,
+                  }))}
                 >
                   <SelectTrigger id="aj-tier" className="w-full">
                     <SelectValue placeholder="Select a node option" />
@@ -314,41 +372,48 @@ export function AdminMarketplaceClient() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldError message={formErrors.tier_id} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="aj-payout">Payout pot ($)</Label>
-                  <Input
-                    id="aj-payout"
-                    type="number"
-                    min="0.1"
-                    step="0.01"
-                    value={editor.form.total_payout}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        form: { ...editor.form, total_payout: e.target.value },
-                      })
-                    }
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aj-payout">Payout pot ($)</Label>
+                    <Input
+                      id="aj-payout"
+                      type="number"
+                      min="0.1"
+                      step="0.01"
+                      value={editor.form.total_payout}
+                      onChange={(e) => {
+                        setEditor((prev) =>
+                          prev
+                            ? { ...prev, form: { ...prev.form, total_payout: e.target.value } }
+                            : prev
+                        );
+                        setFormErrors({});
+                      }}
+                    />
+                    <FieldError message={formErrors.total_payout} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="aj-hours">Duration (h)</Label>
+                    <Input
+                      id="aj-hours"
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      value={editor.form.duration_hours}
+                      onChange={(e) => {
+                        setEditor((prev) =>
+                          prev
+                            ? { ...prev, form: { ...prev.form, duration_hours: e.target.value } }
+                            : prev
+                        );
+                        setFormErrors({});
+                      }}
+                    />
+                    <FieldError message={formErrors.duration_hours} />
+                  </div>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="aj-hours">Duration (h)</Label>
-                  <Input
-                    id="aj-hours"
-                    type="number"
-                    min="0.1"
-                    step="0.5"
-                    value={editor.form.duration_hours}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        form: { ...editor.form, duration_hours: e.target.value },
-                      })
-                    }
-                  />
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="aj-refs">Referrals required</Label>
@@ -358,13 +423,19 @@ export function AdminMarketplaceClient() {
                     min="0"
                     step="1"
                     value={editor.form.required_referrals}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        form: { ...editor.form, required_referrals: e.target.value },
-                      })
-                    }
+                    onChange={(e) => {
+                      setEditor((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              form: { ...prev.form, required_referrals: e.target.value },
+                            }
+                          : prev
+                      );
+                      setFormErrors({});
+                    }}
                   />
+                  <FieldError message={formErrors.required_referrals} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="aj-start">Starts at</Label>
@@ -372,13 +443,14 @@ export function AdminMarketplaceClient() {
                     id="aj-start"
                     type="datetime-local"
                     value={editor.form.starts_at}
-                    onChange={(e) =>
-                      setEditor({
-                        ...editor,
-                        form: { ...editor.form, starts_at: e.target.value },
-                      })
-                    }
+                    onChange={(e) => {
+                      setEditor((prev) =>
+                        prev ? { ...prev, form: { ...prev.form, starts_at: e.target.value } } : prev
+                      );
+                      setFormErrors({});
+                    }}
                   />
+                  <FieldError message={formErrors.starts_at} />
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
+import { moneyError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
@@ -41,10 +42,10 @@ export async function POST(req: Request) {
     return json(400, { error: "Invalid request body" });
   }
 
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return json(400, { error: "Enter a valid withdrawal amount" });
-  }
+  const amountStr = typeof body.amount === "string" ? body.amount : String(body.amount ?? "");
+  const amountErr = moneyError(amountStr, { label: "Withdrawal amount" });
+  if (amountErr) return json(400, { error: amountErr });
+  const amount = Math.round(Number(amountStr) * 100) / 100;
 
   // Destination comes from the profile; require it before a request is allowed.
   const profileRes = await supabaseFetch<ProfileRow[]>(
