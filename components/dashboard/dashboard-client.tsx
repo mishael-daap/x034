@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, LogOut, Settings, ShieldCheck, User, Wallet, X } from "lucide-react";
+import { LogOut, Server, Settings, ShieldCheck, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RULES_ONBOARDING_KEY } from "@/lib/onboarding";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RulesDialog } from "@/components/onboarding/rules-dialog";
 
 type User = {
   id: string;
@@ -56,7 +58,6 @@ type DashboardData = {
   balance: number | null;
   nodes: NodeInfo[];
   referral: Referral | null;
-  commissionEarnings: number | null;
   jobs: Job[];
 };
 
@@ -88,9 +89,29 @@ export function Dashboard({ user }: { user: User }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [showRules, setShowRules] = useState(false);
+
+  // Right after login the session carries a flag → show the rules debrief once.
+  useEffect(() => {
+    let pending = false;
+    try {
+      pending = sessionStorage.getItem(RULES_ONBOARDING_KEY) === "1";
+    } catch {
+      // storage unavailable — skip the onboarding pop-up
+    }
+    if (!pending) return;
+    const id = window.setTimeout(() => {
+      setShowRules(true);
+      try {
+        sessionStorage.removeItem(RULES_ONBOARDING_KEY);
+      } catch {
+        // storage unavailable — ignore
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
   // Live clock for commitment timers (refreshed every 30s; impure calls stay out of render).
   useEffect(() => {
@@ -102,8 +123,8 @@ export function Dashboard({ user }: { user: User }) {
     Promise.all([
       fetch("/api/nodes").then((r) => (r.ok ? r.json() : { balance: null, nodes: [] })),
       fetch("/api/referrals/me")
-        .then((r) => (r.ok ? r.json() : { referral: null, commission_earnings: null }))
-        .catch(() => ({ referral: null, commission_earnings: null })),
+        .then((r) => (r.ok ? r.json() : { referral: null }))
+        .catch(() => ({ referral: null })),
       fetch("/api/marketplace").then((r) => (r.ok ? r.json() : { jobs: [] })),
     ])
       .then(([nodes, referral, marketplace]) => {
@@ -111,7 +132,6 @@ export function Dashboard({ user }: { user: User }) {
           balance: nodes.balance ?? 0,
           nodes: nodes.nodes ?? [],
           referral: referral.referral ?? null,
-          commissionEarnings: referral.commission_earnings ?? 0,
           jobs: marketplace.jobs ?? [],
         });
       })
@@ -121,17 +141,6 @@ export function Dashboard({ user }: { user: User }) {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function copyCode() {
-    if (!data?.referral) return;
-    try {
-      await navigator.clipboard.writeText(data.referral.referral_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard unavailable — ignore
-    }
-  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -144,14 +153,13 @@ export function Dashboard({ user }: { user: User }) {
   if (user.role === "admin") {
     menu.push({ label: "Admin panel", icon: ShieldCheck, onClick: () => router.push("/admin") });
   }
-  menu.push(
-    { label: "Profile", icon: User, onClick: () => router.push("/me") },
-    { label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut }
-  );
+  menu.push({ label: "Sign out", icon: LogOut, danger: true, onClick: handleSignOut });
 
   // Active commitments = nodes with a live assignment (occupied until its job elapses).
   const now = nowMs;
   const commitments = (data?.nodes ?? []).filter((n) => n.assignment);
+  const nodesOwned = (data?.nodes ?? []).length;
+  const nodesFree = (data?.nodes ?? []).filter((n) => n.status === "available").length;
   const freeTierRank = (data?.nodes ?? [])
     .filter((n) => !n.assignment)
     .reduce((max, n) => Math.max(max, TIER_RANK[n.tier_code] ?? 0), 0);
@@ -253,47 +261,38 @@ export function Dashboard({ user }: { user: User }) {
         </section>
       )}
 
-      {/* Referrals */}
+      {/* Nodes */}
       {!data ? (
-        <Skeleton className="mt-6 h-44 w-full rounded-xl" />
+        <Skeleton className="mt-6 h-36 w-full rounded-xl" />
       ) : (
         <section className="mt-8">
-          <h2 className="mb-3 text-sm font-semibold">Referrals</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              href="/referrals"
-              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
-            >
-              <p className="text-xs text-muted-foreground">Commission earned</p>
-              <p className="mt-1 font-mono text-xl font-semibold tabular-nums tracking-tight">
-                {money(data.commissionEarnings ?? 0)}
-              </p>
-            </Link>
-            <Link
-              href="/referrals"
-              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
-            >
-              <p className="text-xs text-muted-foreground">Total referrals</p>
-              <p className="mt-1 text-xl font-semibold tracking-tight">
-                {data.referral?.total_referees ?? 0}
-              </p>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Nodes</h2>
+            <Link href="/nodes" className="text-xs font-medium text-primary">
+              View all
             </Link>
           </div>
-          {data.referral && (
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
-              <div>
-                <p className="text-xs text-muted-foreground">Your referral code</p>
-                <p className="font-mono text-sm font-medium">{data.referral.referral_code}</p>
-              </div>
-              <button
-                onClick={copyCode}
-                className="flex items-center gap-1.5 text-xs font-medium text-primary"
-              >
-                <Copy className="size-3.5" />
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              href="/nodes"
+              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
+              <Server className="size-4 text-muted-foreground" />
+              <p className="mt-3 text-xs text-muted-foreground">Nodes owned</p>
+              <p className="mt-1 text-xl font-semibold tracking-tight">{nodesOwned}</p>
+            </Link>
+            <Link
+              href="/nodes"
+              className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+            >
+              <Server className="size-4 text-emerald-500" />
+              <p className="mt-3 text-xs text-muted-foreground">Nodes free</p>
+              <p className="mt-1 text-xl font-semibold tracking-tight">{nodesFree}</p>
+            </Link>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Free nodes are not committed — browse the marketplace and put them to work.
+          </p>
         </section>
       )}
 
@@ -409,6 +408,9 @@ export function Dashboard({ user }: { user: User }) {
           </div>
         </section>
       )}
+
+      {/* Rules debrief — shown right after login (dismissable). */}
+      <RulesDialog open={showRules} onOpenChange={setShowRules} />
     </div>
   );
 }

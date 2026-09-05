@@ -3,9 +3,9 @@
 import { usePathname } from "next/navigation";
 import { BottomTabs } from "./bottom-tabs";
 
-const TAB_ROUTES = ["/", "/marketplace", "/nodes"];
+const TAB_ROUTES = ["/", "/marketplace", "/nodes", "/me"];
 
-/** App shell: adds the bottom tab bar (and content padding) on the 3 tab routes. */
+/** App shell: adds the bottom tab bar (and content padding) on the 4 tab routes. */
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const showTabs = TAB_ROUTES.includes(pathname);

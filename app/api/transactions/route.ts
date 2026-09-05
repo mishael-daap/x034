@@ -34,7 +34,18 @@ export async function GET() {
     `/rest/v1/transactions?select=*,reference:assignments(job:jobs(company:companies(name)))&user_id=eq.${session.sub}&order=created_at.desc`
   );
 
-  const transactions = (txRes.status === 200 ? txRes.data ?? [] : []).map((t) => ({
+  const rows = txRes.status === 200 ? txRes.data ?? [] : [];
+
+  // Lifetime income = everything the user has earned (job earnings + referral
+  // commissions). Deposits (funding) and own payments are not income.
+  const total_income = Number(
+    rows
+      .filter((t) => t.type === "earnings" || t.type === "referral")
+      .reduce((sum, t) => sum + Number(t.amount), 0)
+      .toFixed(2)
+  );
+
+  const transactions = rows.map((t) => ({
     id: t.id,
     type: t.type,
     amount: Number(t.amount),
@@ -43,5 +54,5 @@ export async function GET() {
     company: t.reference?.job?.company?.name ?? null,
   }));
 
-  return json(200, { balance, transactions });
+  return json(200, { balance, total_income, transactions });
 }

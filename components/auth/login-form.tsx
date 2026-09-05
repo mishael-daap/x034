@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { markRulesOnboardingPending } from "@/lib/onboarding";
 import {
   Card,
   CardContent,
@@ -41,6 +42,7 @@ export function LoginForm() {
       return;
     }
 
+    markRulesOnboardingPending();
     router.push("/");
     router.refresh();
   }
