@@ -19,7 +19,10 @@ import {
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 import { BankSelect } from "@/components/bank-select";
 import { FieldError } from "@/components/ui/field-error";
+import { FitText } from "@/components/ui/fit-text";
 import { accountNumberError, moneyError } from "@/lib/validation";
+
+type WithdrawMethod = { mode: "input" | "presets"; presets: number[] };
 
 type Withdrawal = {
   id: string;
@@ -53,6 +56,8 @@ export function WithdrawClient() {
   const [amount, setAmount] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Withdrawal amount method chosen by the admin (input vs fixed-amount buttons).
+  const [method, setMethod] = useState<WithdrawMethod>({ mode: "input", presets: [] });
 
   // Bank-editor dialog state (add / change payout account right here).
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -76,9 +81,13 @@ export function WithdrawClient() {
       fetch("/api/banks")
         .then((r) => (r.ok ? r.json() : { banks: [] }))
         .catch(() => ({ banks: [] })),
-    ]).then(([tx, w, me, b]) => {
+      fetch("/api/withdraw/method")
+        .then((r) => (r.ok ? r.json() : { mode: "input", presets: [] }))
+        .catch(() => ({ mode: "input", presets: [] })),
+    ]).then(([tx, w, me, b, m]) => {
       setBalance(tx.balance ?? 0);
       setWithdrawals(w.withdrawals ?? []);
+      setMethod(m?.mode === "presets" ? { mode: "presets", presets: m.presets ?? [] } : { mode: "input", presets: [] });
       const u = me.user;
       setDestination(
         u
@@ -206,9 +215,12 @@ export function WithdrawClient() {
             <Wallet className="size-4" />
             {amountValid && !exceeds ? "Balance after withdrawal" : "Available balance"}
           </div>
-          <p className="mt-2 font-[var(--font-roboto-mono)] text-5xl font-black tabular-nums tracking-tighter">
+          <FitText
+            className="mt-2 font-[var(--font-roboto-mono)] text-5xl font-black tabular-nums tracking-tighter"
+            title={amountValid && !exceeds ? money(remaining) : money(balance)}
+          >
             {amountValid && !exceeds ? money(remaining) : money(balance)}
-          </p>
+          </FitText>
           {amountValid && !exceeds && (
             <p className="mt-1 text-xs text-primary-foreground/70">
               Withdrawing {money(amountCents / 100)}
@@ -217,33 +229,54 @@ export function WithdrawClient() {
         </section>
       )}
 
-      <div className="mt-6 grid gap-1.5">
+      <div className="mt-6 grid gap-2">
         <Label htmlFor="withdraw-amount">Withdraw amount</Label>
-        <Input
-          id="withdraw-amount"
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          value={amount}
-          onChange={(e) => {
-            setAmount(e.target.value);
-            setError(null);
-          }}
-        />
-        {amountValid && exceeds ? (
+        {method.mode === "presets" && method.presets.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {method.presets.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  setAmount(String(p));
+                  setError(null);
+                }}
+                className={
+                  "rounded-full px-4 py-2 text-sm font-semibold transition-colors " +
+                  (Number(amount) === p
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground ring-1 ring-foreground/10 hover:text-foreground")
+                }
+              >
+                {money(p)}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <Input
+            id="withdraw-amount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setError(null);
+            }}
+          />
+        )}
+        {amountErr ? (
+          <p className="text-sm text-destructive">{amountErr}</p>
+        ) : amountValid && exceeds ? (
           <p className="text-sm text-destructive">
             Amount exceeds your available balance ({money(cents / 100)}).
           </p>
-        ) : amountErr ? (
-          <p className="text-sm text-destructive">{amountErr}</p>
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {amountValid
-              ? `A 10% commission applies — you'll receive ${money((amountCents / 100) * 0.9)} in your bank.`
-              : "Requests are reviewed and paid by the platform admin (10% commission)."}
+            A 10% commission applies on all withdrawals.
           </p>
         )}
       </div>
@@ -274,7 +307,7 @@ export function WithdrawClient() {
         className="mt-4 w-full"
       >
         <ArrowUpFromLine />
-        {withdrawing ? "Requesting…" : "Request withdrawal"}
+        {withdrawing ? "Withdrawing…" : "Withdraw"}
       </Button>
       {!hasDestination && destination && (
         <p className="mt-2 text-sm text-muted-foreground">
@@ -288,14 +321,14 @@ export function WithdrawClient() {
           No withdrawal requests yet.
         </p>
       ) : (
-        <ul className="mt-2 max-h-[194px] divide-y divide-border/70 overflow-y-auto">
+        <ul className="mt-2 divide-y divide-border/70">
           {withdrawals.map((w) => (
-            <li key={w.id} className="flex h-16 items-center justify-between gap-3">
+            <li key={w.id} className="flex items-center justify-between gap-3 py-3 first:pt-1">
               <div className="min-w-0">
-                <p className="truncate font-[var(--font-roboto-mono)] text-sm font-semibold tabular-nums">
+                <p className="font-[var(--font-roboto-mono)] text-sm font-semibold tabular-nums">
                   −{money(w.amount)}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {new Date(w.created_at).toLocaleDateString(undefined, {
                     month: "short",
                     day: "numeric",
@@ -303,7 +336,7 @@ export function WithdrawClient() {
                   })}
                 </p>
                 {w.status === "declined" && w.reason && (
-                  <p className="truncate text-xs text-destructive/80">{w.reason}</p>
+                  <p className="mt-0.5 break-words text-xs text-destructive/80">{w.reason}</p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">{statusBadge(w)}</div>
