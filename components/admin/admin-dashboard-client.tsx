@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Wallet } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FitText } from "@/components/ui/fit-text";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
 type Stats = {
@@ -103,9 +104,9 @@ export function AdminDashboardClient() {
               <Wallet className="size-4" />
               Platform balance
             </div>
-            <p className="mt-2 font-[var(--font-roboto-mono)] text-5xl font-black tabular-nums tracking-tighter">
+            <FitText className="mt-2 font-[var(--font-roboto-mono)] text-5xl font-black tabular-nums tracking-tighter">
               {money(stats?.balance ?? 0)}
-            </p>
+            </FitText>
             <p className="mt-1 text-xs text-primary-foreground/70">
               Income minus approved payouts · 10% of each withdrawal stays here
             </p>
@@ -114,9 +115,9 @@ export function AdminDashboardClient() {
           {/* Total income */}
           <section className="mt-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <p className="text-xs text-muted-foreground">Total income</p>
-            <p className="mt-1 font-[var(--font-roboto-mono)] text-3xl font-black tabular-nums tracking-tighter">
+            <FitText className="mt-1 font-[var(--font-roboto-mono)] text-3xl font-black tabular-nums tracking-tighter">
               {money(stats?.total_income ?? 0)}
-            </p>
+            </FitText>
             <p className="mt-1 text-xs text-muted-foreground">
               Everything users have deposited
             </p>

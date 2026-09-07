@@ -54,7 +54,6 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
   const amountErr = amount.trim() ? moneyError(amount, { label: "Deposit amount" }) : null;
   const amountValid = amountErr === null && Number.isFinite(parsed) && parsed > 0;
   const amountCents = amountValid ? Math.round(parsed * 100) : 0;
-  const after = (Math.round((balance ?? 0) * 100) + amountCents) / 100;
 
   async function handleCard() {
     if (!amountValid || busy) return;
@@ -213,34 +212,17 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
         <FieldError message={amountErr} />
       </div>
 
-      <div className="mt-4 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">
-        {mode === "card" ? (
-          <p className="text-muted-foreground">
-            Pay with card via Paystack. You&apos;ll be redirected to Paystack to complete the
-            payment, then your wallet is credited automatically.
-          </p>
-        ) : (
-          <p className="text-muted-foreground">
-            Instant sandbox credit — no money moves. Use it to try purchases and withdrawals.
-          </p>
-        )}
-        {mode === "test" && amountValid && balance != null && (
-          <p className="mt-2 font-medium text-foreground">
-            Balance after deposit: {money(after)}
-          </p>
-        )}
-        {error ? (
-          <p className="mt-2 text-destructive">{error}</p>
-        ) : deposited ? (
-          <p className="mt-2 flex items-center gap-1.5 font-medium text-emerald-600">
-            <Check className="size-4" />
-            Deposited {money(amountCents / 100)}.{" "}
-            <Link href="/me" className="underline underline-offset-4">
-              Back to profile
-            </Link>
-          </p>
-        ) : null}
-      </div>
+      {error ? (
+        <p className="mt-4 text-sm text-destructive">{error}</p>
+      ) : deposited ? (
+        <p className="mt-4 flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+          <Check className="size-4" />
+          Deposited {money(amountCents / 100)}.{" "}
+          <Link href="/me" className="underline underline-offset-4">
+            Back to profile
+          </Link>
+        </p>
+      ) : null}
 
       <Button
         onClick={mode === "card" ? handleCard : handleTest}
@@ -253,7 +235,7 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
             ? "Contacting Paystack…"
             : "Depositing…"
           : mode === "card"
-            ? "Pay with Paystack"
+            ? "Pay"
             : "Add test funds"}
       </Button>
     </div>

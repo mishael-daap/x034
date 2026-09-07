@@ -196,3 +196,14 @@
     @apply font-sans;
   }
 }
+/* Long-content safety: nothing may push the page wider than the viewport, and
+   long labels wrap/ellipsize inside their box instead of spilling out. */
+html,
+body {
+  overflow-x: clip;
+}
+img,
+video,
+svg {
+  max-width: 100%;
+}

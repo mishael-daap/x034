@@ -23,18 +23,49 @@ type TierRow = {
 
 const TIER_SELECT = "id,code,name,vcpu,ram_gb,gpu,bandwidth,price";
 
-/** GET /api/admin/node-tiers — every node option (admin only). */
+type NodeRow = { tier: string | null; owner: string | null };
+
+/**
+ * GET /api/admin/node-tiers — every node option (admin only), each with how
+ * many nodes were bought (`owned`) and by how many distinct people (`buyers`).
+ */
 export async function GET() {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
   const role = await getUserRole(session.sub);
   if (role !== "admin") return json(403, { error: "Admin access required" });
 
-  const res = await supabaseFetch<TierRow[]>(
-    `/rest/v1/node_tiers?select=${TIER_SELECT}&order=price`
-  );
+  const [res, nodesRes] = await Promise.all([
+    supabaseFetch<TierRow[]>(
+      `/rest/v1/node_tiers?select=${TIER_SELECT}&order=price`
+    ),
+    supabaseFetch<NodeRow[]>(
+      `/rest/v1/nodes?select=tier,owner`,
+      { headers: { Range: "0-99999" } }
+    ),
+  ]);
   if (res.status !== 200) return json(res.status, { error: res.error });
-  return json(200, { tiers: res.data ?? [] });
+
+  // Per-tier purchase stats: node count + distinct buyers.
+  const perTier = new Map<string, { owned: number; buyers: Set<string> }>();
+  for (const n of nodesRes.status === 200 ? (nodesRes.data ?? []) : []) {
+    if (!n.tier) continue;
+    const entry = perTier.get(n.tier) ?? { owned: 0, buyers: new Set<string>() };
+    entry.owned += 1;
+    if (n.owner) entry.buyers.add(n.owner);
+    perTier.set(n.tier, entry);
+  }
+
+  const tiers = (res.data ?? []).map((t) => {
+    const stats = perTier.get(t.id);
+    return {
+      ...t,
+      owned: stats?.owned ?? 0,
+      buyers: stats?.buyers.size ?? 0,
+    };
+  });
+
+  return json(200, { tiers });
 }
 
 function validateTier(

@@ -27,6 +27,8 @@ type Tier = {
   gpu: number;
   bandwidth: number;
   price: number;
+  owned: number;
+  buyers: number;
 };
 
 const money = (n: number) =>
@@ -203,6 +205,10 @@ export function AdminNodesClient() {
                   </p>
                   <p className="font-mono text-sm font-bold tabular-nums text-primary">
                     {money(t.price)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t.owned} node{t.owned === 1 ? "" : "s"} owned · {t.buyers} buyer
+                    {t.buyers === 1 ? "" : "s"}
                   </p>
                 </div>
                 <div className="flex gap-2">

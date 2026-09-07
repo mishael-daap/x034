@@ -141,6 +141,22 @@ export function startsAtError(raw: string): string | null {
   return null;
 }
 
+/**
+ * Reject naive date-times (no UTC offset). A bare "2026-09-06T14:30" is a
+ * local wall-clock value — parsed on a UTC server it shifts by the admin's
+ * whole UTC offset (the "starts 1h late" bug). The UI converts the
+ * datetime-local picker to an offset ISO before sending, so anything naive
+ * arriving here is a stale client or a direct API call: fail loudly instead
+ * of silently storing the wrong instant.
+ */
+export function timezoneIsoError(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  return /(Z|[+-]\d{2}:?\d{2})$/i.test(v)
+    ? null
+    : "Send a timezone-aware ISO time (ends in Z or ±HH:MM)";
+}
+
 /** Whole-number helpers with sane domain caps (imported by callers when needed). */
 export const JOB_PAYOUT_MIN = 0.1;
 export const JOB_PAYOUT_MAX = 1_000_000;
