@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Server, Wallet } from "lucide-react";
 import { RULES_ONBOARDING_KEY } from "@/lib/onboarding";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FitText } from "@/components/ui/fit-text";
 import { RulesDialog } from "@/components/onboarding/rules-dialog";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 
@@ -144,10 +145,14 @@ export function Dashboard({ user }: { user: User }) {
     .filter((n) => !n.assignment)
     .reduce((max, n) => Math.max(max, TIER_RANK[n.tier_code] ?? 0), 0);
   const qualifyingRefs = data?.referral?.qualifying_count ?? 0;
+  // Curated teaser = jobs you can actually join right now (pool still open);
+  // locked/running jobs are shown on the full marketplace board instead.
   const curatedJobs = (data?.jobs ?? [])
     .filter(
       (j) =>
-        (TIER_RANK[j.tier] ?? 0) <= freeTierRank && j.required_referrals <= qualifyingRefs
+        j.status === "upcoming" &&
+        (TIER_RANK[j.tier] ?? 0) <= freeTierRank &&
+        j.required_referrals <= qualifyingRefs
     )
     .slice(0, 3);
 
@@ -179,9 +184,12 @@ export function Dashboard({ user }: { user: User }) {
             <Wallet className="size-4" />
             Available balance
           </div>
-          <p className="mt-2 font-[var(--font-roboto-mono)] text-6xl font-black tabular-nums tracking-tighter">
+          <FitText
+            className="mt-2 font-[var(--font-roboto-mono)] text-6xl font-black tabular-nums tracking-tighter"
+            title={data.balance == null ? undefined : money(data.balance)}
+          >
             {data.balance == null ? "—" : money(data.balance)}
-          </p>
+          </FitText>
         </section>
       )}
 

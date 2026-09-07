@@ -5,6 +5,7 @@ import { getUserRole } from "@/lib/auth/role";
 import {
   decimalError,
   startsAtError,
+  timezoneIsoError,
   wholeNumberError,
   JOB_DURATION_MAX,
   JOB_DURATION_MIN,
@@ -25,11 +26,12 @@ type JobRow = {
   starts_at: string;
   required_referrals: number;
   status: string;
+  actual_duration_hours: number | null;
   company: { id: string; name: string } | null;
   min_tier: { id: string; code: string; name: string } | null;
 };
 
-const JOB_SELECT = `id,company:companies(id,name),min_tier:node_tiers(id,code,name),total_payout,duration_hours,starts_at,required_referrals,status`;
+const JOB_SELECT = `id,company:companies(id,name),min_tier:node_tiers(id,code,name),total_payout,duration_hours,starts_at,required_referrals,status,actual_duration_hours`;
 
 /** GET /api/admin/jobs — all jobs (any status), ordered by start time. */
 export async function GET() {
@@ -55,6 +57,7 @@ export async function GET() {
     starts_at: j.starts_at,
     required_referrals: Number(j.required_referrals),
     status: j.status,
+    actual_duration_hours: j.actual_duration_hours,
   }));
 
   return json(200, { jobs });
@@ -94,6 +97,7 @@ export async function POST(req: Request) {
     }),
     wholeNumberError(str(body.required_referrals), { label: "Referrals required", min: 0 }),
     startsAtError(startsAt),
+    timezoneIsoError(startsAt),
   ];
   const firstError = checks.find((c): c is string => c !== null);
   if (firstError) return json(400, { error: firstError });

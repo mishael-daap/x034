@@ -21,7 +21,16 @@ type JobRow = {
 
 type AssignmentRow = { job: string; status: string };
 
-/** GET /api/marketplace — open jobs (not yet started) with live pool info. */
+const STATUS_RANK: Record<string, number> = { upcoming: 0, locked: 1, in_progress: 2 };
+
+/**
+ * GET /api/marketplace — the live board, with pool info.
+ *
+ * Shows every job that is not finished yet: upcoming (pool open), locked (final
+ * hour before start — frozen) and in_progress (running). A job drops off the
+ * board once its pool has elapsed/completed, so a committed node stays visible
+ * (read-only) while it is working rather than vanishing at start.
+ */
 export async function GET() {
   const jobsRes = await supabaseFetch<JobRow[]>(
     `/rest/v1/jobs?select=*,company:companies(name),min_tier:node_tiers(code,name)&order=starts_at`
@@ -41,10 +50,12 @@ export async function GET() {
 
   const now = Date.now();
   const jobs = (jobsRes.data ?? [])
-    .filter((j) => new Date(j.starts_at).getTime() > now) // open = not started yet
     .map((j) => {
       const poolCount = pool.get(j.id) ?? 0;
       const estDuration = estimateDuration(j.duration_hours, poolCount);
+      // Once a job has started, its end is the realized duration; before that
+      // (upcoming/locked) the duration is irrelevant to the status boundary.
+      const realizedDuration = j.actual_duration_hours ?? estDuration;
       return {
         id: j.id,
         company: j.company?.name ?? "Unknown",
@@ -58,9 +69,15 @@ export async function GET() {
         max_pool: maxPoolSize(j.total_payout),
         estimated_duration: estDuration,
         estimated_earnings: Number(estimateEarnings(j.total_payout, poolCount).toFixed(2)),
-        status: deriveJobStatus(j.starts_at, j.duration_hours, now),
+        status: deriveJobStatus(j.starts_at, realizedDuration, now),
       };
-    });
+    })
+    .filter((j) => j.status !== "completed")
+    .sort(
+      (a, b) =>
+        (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3) ||
+        a.starts_at.localeCompare(b.starts_at)
+    );
 
   return json(200, { jobs });
 }

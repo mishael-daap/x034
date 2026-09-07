@@ -43,7 +43,10 @@ type AdminJob = {
   starts_at: string;
   required_referrals: number;
   status: string;
+  actual_duration_hours: number | null;
 };
+
+const COMMIT_WINDOW_MS = 3_600_000; // matches COMMIT_WINDOW_HOURS = 1
 
 type Option = { id: string; name: string };
 type TierOption = { id: string; code: string; name: string };
@@ -109,6 +112,8 @@ export function AdminMarketplaceClient() {
   const [deleteTarget, setDeleteTarget] = useState<AdminJob | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyDelete, setBusyDelete] = useState(false);
+  const [busyLifecycle, setBusyLifecycle] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -190,7 +195,10 @@ export function AdminMarketplaceClient() {
         total_payout: Number(editor.form.total_payout),
         duration_hours: Number(editor.form.duration_hours),
         required_referrals: Number(editor.form.required_referrals),
-        starts_at: editor.form.starts_at,
+        // datetime-local gives a local wall-clock value with no offset; convert
+        // it here (browser local time) so the server never misreads it as UTC
+        // and shifts the job an hour (or more) later than the admin set.
+        starts_at: new Date(editor.form.starts_at).toISOString(),
       }),
     });
     setSaving(false);
@@ -219,6 +227,30 @@ export function AdminMarketplaceClient() {
     load();
   }
 
+  // Admin lifecycle shortcuts: start/lock a job now, or reopen it for commits.
+  async function handleLifecycle(job: AdminJob, action: "lock" | "open") {
+    setBusyLifecycle(job.id);
+    setError(null);
+    setNotice(null);
+    const res = await fetch(`/api/admin/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    setBusyLifecycle(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Could not update job");
+      return;
+    }
+    setNotice(
+      action === "lock"
+        ? `"${job.company}" locked — job started now.`
+        : `"${job.company}" reopened — open for commits again (starts in 3h).`
+    );
+    load();
+  }
+
   return (
     <div className="mx-auto w-full max-w-md p-4 pb-10">
       <header className="mb-4 flex items-start justify-between gap-3">
@@ -236,6 +268,7 @@ export function AdminMarketplaceClient() {
         Create job
       </Button>
 
+      {notice && <p className="mb-3 text-sm text-emerald-600">{notice}</p>}
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
       {!jobs ? (
@@ -276,6 +309,37 @@ export function AdminMarketplaceClient() {
                   minute: "2-digit",
                 })}
               </p>
+
+              {/* Lock / reopen lifecycle controls (only on jobs whose earnings
+                  haven't been locked yet — status open & no realized duration). */}
+              {(() => {
+                const live = job.status === "open" && job.actual_duration_hours == null;
+                if (!live) return null; // earnings already booked — no lifecycle control
+                const start = new Date(job.starts_at).getTime();
+                const canReopen = Date.now() >= start - COMMIT_WINDOW_MS;
+                return (
+                  <div className="mt-3 grid gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busyLifecycle === job.id}
+                      onClick={() => handleLifecycle(job, "lock")}
+                    >
+                      {busyLifecycle === job.id ? "Updating…" : "Lock now (start the job)"}
+                    </Button>
+                    {canReopen && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyLifecycle === job.id}
+                        onClick={() => handleLifecycle(job, "open")}
+                      >
+                        Reopen for commits
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="mt-3 flex gap-2">
                 <Button
