@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { moneyError } from "@/lib/validation";
+import {
+  DEFAULT_WITHDRAWAL_POLICY,
+  normalizeWithdrawalPolicy,
+  withdrawalPolicyState,
+} from "@/lib/withdrawal-policy";
 
 export const runtime = "nodejs";
 
@@ -34,6 +39,25 @@ type WithdrawalRow = {
 export async function POST(req: Request) {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
+
+  // Admin-controlled withdrawal window: closed windows reject the request
+  // before any money is touched, with the admin's custom reason.
+  const policyRes = await supabaseFetch<{ value: unknown }[]>(
+    `/rest/v1/app_settings?key=eq.withdrawal_policy&limit=1`
+  );
+  const policy = normalizeWithdrawalPolicy(
+    (policyRes.status === 200 && policyRes.data?.length
+      ? policyRes.data[0].value
+      : null) ?? DEFAULT_WITHDRAWAL_POLICY
+  );
+  const policyState = withdrawalPolicyState(policy);
+  if (!policyState.open) {
+    return json(403, {
+      error: policyState.message,
+      policy: policyState,
+      error_code: "withdrawal_closed",
+    });
+  }
 
   let body: Record<string, unknown>;
   try {

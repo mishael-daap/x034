@@ -21,6 +21,7 @@ import { BankSelect } from "@/components/bank-select";
 import { FieldError } from "@/components/ui/field-error";
 import { FitText } from "@/components/ui/fit-text";
 import { accountNumberError, moneyError } from "@/lib/validation";
+import type { WithdrawalPolicyState } from "@/lib/withdrawal-policy";
 
 type WithdrawMethod = { mode: "input" | "presets"; presets: number[] };
 
@@ -58,6 +59,12 @@ export function WithdrawClient() {
   const [error, setError] = useState<string | null>(null);
   // Withdrawal amount method chosen by the admin (input vs fixed-amount buttons).
   const [method, setMethod] = useState<WithdrawMethod>({ mode: "input", presets: [] });
+  // When withdrawals are allowed (admin-controlled window) + the popup copy.
+  const [policy, setPolicy] = useState<WithdrawalPolicyState | null>(null);
+  const [closedPopup, setClosedPopup] = useState<{
+    message: string;
+    nextOpen: string | null;
+  } | null>(null);
 
   // Bank-editor dialog state (add / change payout account right here).
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -82,12 +89,13 @@ export function WithdrawClient() {
         .then((r) => (r.ok ? r.json() : { banks: [] }))
         .catch(() => ({ banks: [] })),
       fetch("/api/withdraw/method")
-        .then((r) => (r.ok ? r.json() : { mode: "input", presets: [] }))
-        .catch(() => ({ mode: "input", presets: [] })),
+        .then((r) => (r.ok ? r.json() : { mode: "input", presets: [], policy: null }))
+        .catch(() => ({ mode: "input", presets: [], policy: null })),
     ]).then(([tx, w, me, b, m]) => {
       setBalance(tx.balance ?? 0);
       setWithdrawals(w.withdrawals ?? []);
       setMethod(m?.mode === "presets" ? { mode: "presets", presets: m.presets ?? [] } : { mode: "input", presets: [] });
+      setPolicy(m?.policy ?? null);
       const u = me.user;
       setDestination(
         u
@@ -167,6 +175,11 @@ export function WithdrawClient() {
 
   async function handleWithdraw() {
     if (!canWithdraw) return;
+    // Admin window: show the custom popup instead of calling the API.
+    if (policy && !policy.open) {
+      setClosedPopup({ message: policy.message, nextOpen: policy.next_open });
+      return;
+    }
     setWithdrawing(true);
     setError(null);
     const res = await fetch("/api/withdrawals", {
@@ -177,12 +190,25 @@ export function WithdrawClient() {
     setWithdrawing(false);
     if (!res.ok) {
       const d = await res.json().catch(() => null);
+      if (d?.policy && d.policy.open === false) {
+        setClosedPopup({ message: d.error ?? d.policy.message, nextOpen: d.policy.next_open });
+        return;
+      }
       setError(d?.error ?? "Could not request withdrawal");
       return;
     }
     setAmount("");
     load();
   }
+
+  const fmtNextOpen = (iso: string) =>
+    new Date(iso).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
 
   const statusBadge = (w: Withdrawal) => {
     if (w.status === "approved") return <Badge>Approved</Badge>;
@@ -344,6 +370,31 @@ export function WithdrawClient() {
           ))}
         </ul>
       )}
+
+      {/* Admin popup: why withdrawals are closed right now */}
+      <Dialog
+        open={closedPopup !== null}
+        onOpenChange={(open) => {
+          if (!open) setClosedPopup(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Withdrawal unavailable</DialogTitle>
+            <DialogDescription>
+              {closedPopup?.message ?? "Please check back later."}
+            </DialogDescription>
+          </DialogHeader>
+          {closedPopup?.nextOpen && (
+            <p className="text-sm text-muted-foreground">
+              You can withdraw again on {fmtNextOpen(closedPopup.nextOpen)}.
+            </p>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setClosedPopup(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add / change bank popup */}
       <Dialog

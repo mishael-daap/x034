@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
 import {
   Select,
@@ -16,6 +17,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { moneyError } from "@/lib/validation";
+import {
+  DEFAULT_WITHDRAWAL_POLICY,
+  normalizeWithdrawalPolicy,
+  recurrenceLabel,
+  withdrawalPolicyState,
+  type WithdrawalPolicy,
+  type WithdrawalPolicyMode,
+  type WithdrawalRecurrence,
+} from "@/lib/withdrawal-policy";
 
 type AdminWithdrawal = {
   id: string;
@@ -53,11 +63,12 @@ export function AdminTransactionsClient() {
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
-          <p className="text-sm text-muted-foreground">
-            {tab === "transactions"
-              ? "Withdrawal requests from all users. Approve to pay out 90% — 10% commission stays with the platform."
-              : "Choose how users pick an amount to withdraw. Only one method shows on the user's page."}
-          </p>
+          {tab === "transactions" && (
+            <p className="text-sm text-muted-foreground">
+              Withdrawal requests from all users. Approve to pay out 90% — 10% commission stays
+              with the platform.
+            </p>
+          )}
         </div>
         <SettingsMenu />
       </header>
@@ -432,9 +443,6 @@ function WithdrawMethodPanel() {
         <>
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <p className="text-sm font-semibold">How users withdraw</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Exactly one method appears on the user&apos;s Withdraw page.
-            </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
@@ -449,9 +457,6 @@ function WithdrawMethodPanel() {
                 }
               >
                 <p className="text-sm font-semibold">Amount buttons</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Fixed amounts you set below
-                </p>
               </button>
               <button
                 type="button"
@@ -465,9 +470,6 @@ function WithdrawMethodPanel() {
                 }
               >
                 <p className="text-sm font-semibold">Free amount</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Users type any amount (as now)
-                </p>
               </button>
             </div>
             {busyMode && <p className="mt-2 text-xs text-muted-foreground">Saving…</p>}
@@ -475,11 +477,6 @@ function WithdrawMethodPanel() {
 
           <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <p className="text-sm font-semibold">Fixed amounts</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {data.mode === "presets"
-                ? "These buttons are what users tap to withdraw."
-                : "Curate these now — they show as buttons when Amount buttons is selected."}
-            </p>
 
             {/* Add */}
             <div className="mt-3 flex items-end gap-2">
@@ -507,11 +504,7 @@ function WithdrawMethodPanel() {
             {addErr && <p className="mt-1 text-xs text-destructive">{addErr}</p>}
 
             {/* List */}
-            {data.presets.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No fixed amounts yet — add your first one above.
-              </p>
-            ) : (
+            {data.presets.length > 0 && (
               <ul className="mt-3 grid gap-2">
                 {data.presets.map((p) => {
                   const editing = editingId === p.id;
@@ -589,8 +582,406 @@ function WithdrawMethodPanel() {
         </>
       )}
 
+      {/* When users may withdraw + the popup they see when they can't */}
+      <WithdrawalWindowEditor />
+
       {notice && <p className="text-sm text-emerald-600">{notice}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Withdrawal window — when users may withdraw + the popup they see when they
+// can't. Stored as JSON in app_settings (key `withdrawal_policy`). Each mode
+// carries its own popup message, and scheduled/recurring modes use a date
+// boundary plus a daily time window (UTC).
+// ---------------------------------------------------------------------------
+
+const WINDOW_MODES: { value: WithdrawalPolicyMode; label: string; hint: string }[] = [
+  { value: "open", label: "Any time", hint: "No restriction" },
+  { value: "scheduled", label: "Specific window", hint: "Dates + daily hours" },
+  { value: "recurring", label: "Recurring", hint: "e.g. every Friday" },
+  { value: "disabled", label: "Not allowed", hint: "Block withdrawals" },
+];
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** ISO instant → value for a date input, read in UTC (boundary days are UTC). */
+function toUtcDateInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+/** A picked calendar date (padded or not) becomes UTC midnight so days round-trip. */
+function fromUtcDate(value: string): string | null {
+  const m = (value ?? "").trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+const fmtInstant = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+/** "Mar 1, 2026 → Mar 31, 2026 · 09:00–17:00 UTC" */
+function scheduleSummary(policy: WithdrawalPolicy): string {
+  const dates =
+    policy.boundary_start && policy.boundary_end
+      ? `${fmtDay(policy.boundary_start)} → ${fmtDay(policy.boundary_end)}`
+      : "dates incomplete";
+  return `${dates} · ${policy.day_start}–${policy.day_end} UTC`;
+}
+
+function WithdrawalWindowEditor() {
+  const [policy, setPolicy] = useState<WithdrawalPolicy | null>(null);
+  // Raw date strings live outside the policy so partial typing is never wiped;
+  // they're parsed into UTC dates when we save and for the live summary.
+  const [startDraft, setStartDraft] = useState("");
+  const [endDraft, setEndDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const load = useCallback(() => {
+    fetch("/api/admin/withdrawal-policy")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("bad"))))
+      .then((d) => {
+        const next = normalizeWithdrawalPolicy(d.policy ?? DEFAULT_WITHDRAWAL_POLICY);
+        setPolicy(next);
+        setStartDraft(toUtcDateInput(next.boundary_start));
+        setEndDraft(toUtcDateInput(next.boundary_end));
+      })
+      .catch(() => setError("Could not load withdrawal windows."));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function patch(p: Partial<WithdrawalPolicy>) {
+    setPolicy((prev) => (prev ? { ...prev, ...p } : prev));
+    setError(null);
+    setNotice(null);
+  }
+
+  function setStartDate(value: string) {
+    setStartDraft(value);
+    setError(null);
+    setNotice(null);
+  }
+
+  function setEndDate(value: string) {
+    setEndDraft(value);
+    setError(null);
+    setNotice(null);
+  }
+
+  function toggleWeekday(day: number) {
+    if (!policy) return;
+    const set = new Set(policy.weekdays);
+    if (set.has(day)) set.delete(day);
+    else set.add(day);
+    patch({ weekdays: [...set].sort((a, b) => a - b) });
+  }
+
+  function patchMessage(value: string) {
+    if (!policy || policy.mode === "open") return;
+    const mode = policy.mode;
+    setPolicy((prev) =>
+      prev ? { ...prev, messages: { ...prev.messages, [mode]: value } } : prev
+    );
+    setError(null);
+    setNotice(null);
+  }
+
+  async function save() {
+    if (!policy) return;
+    const payload: WithdrawalPolicy = {
+      ...policy,
+      boundary_start: fromUtcDate(startDraft),
+      boundary_end: fromUtcDate(endDraft),
+    };
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    const res = await fetch("/api/admin/withdrawal-policy", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Could not save withdrawal windows");
+      return;
+    }
+    const d = await res.json().catch(() => null);
+    const saved = normalizeWithdrawalPolicy(d?.policy ?? payload);
+    setPolicy(saved);
+    setStartDraft(toUtcDateInput(saved.boundary_start));
+    setEndDraft(toUtcDateInput(saved.boundary_end));
+    setNotice("Withdrawal window saved — users see the new rule immediately.");
+  }
+
+  if (!policy) {
+    return (
+      <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="size-4 text-muted-foreground" />
+          <p className="text-sm font-semibold">When users can withdraw</p>
+        </div>
+        <Skeleton className="mt-3 h-24 w-full rounded-xl" />
+        {error && (
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-destructive">{error}</p>
+            <Button size="sm" variant="outline" onClick={load}>
+              Retry
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  // The policy the UI previews/saves: drafts parsed into UTC boundary dates.
+  const working: WithdrawalPolicy = {
+    ...policy,
+    boundary_start: fromUtcDate(startDraft),
+    boundary_end: fromUtcDate(endDraft),
+  };
+  const live = withdrawalPolicyState(working, now);
+  const weekly = policy.recurrence === "weekly";
+  const showSchedule = policy.mode === "scheduled" || policy.mode === "recurring";
+  const messageMode = policy.mode === "open" ? null : policy.mode;
+
+  return (
+    <section className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <div className="flex items-center gap-2">
+        <CalendarClock className="size-4 text-muted-foreground" />
+        <p className="text-sm font-semibold">When users can withdraw</p>
+      </div>
+
+      {/* Mode */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {WINDOW_MODES.map((m) => (
+          <button
+            key={m.value}
+            type="button"
+            onClick={() => {
+              patch({ mode: m.value });
+              setNotice(null);
+            }}
+            className={
+              "rounded-lg p-3 text-left ring-1 transition-colors " +
+              (policy.mode === m.value
+                ? "bg-primary/10 ring-primary"
+                : "bg-muted/30 ring-foreground/10 hover:bg-muted/60")
+            }
+          >
+            <p className="text-sm font-semibold">{m.label}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Recurring rules */}
+      {policy.mode === "recurring" && (
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-rec">Repeats</Label>
+              <Select
+                value={policy.recurrence}
+                onValueChange={(v) => patch({ recurrence: v as WithdrawalRecurrence })}
+                items={[
+                  { value: "weekly", label: "Weekly" },
+                  { value: "monthly", label: "Monthly" },
+                ]}
+              >
+                <SelectTrigger id="wp-rec" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-interval">Every</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="wp-interval"
+                  inputMode="numeric"
+                  value={String(policy.interval)}
+                  onChange={(e) =>
+                    patch({
+                      interval: Math.max(1, Number(e.target.value.replace(/\D/g, "")) || 1),
+                    })
+                  }
+                />
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  {weekly ? "week(s)" : "month(s)"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {weekly ? (
+            <div className="grid gap-1.5">
+              <Label>Days</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAY_LABELS.map((label, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleWeekday(day)}
+                    className={
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
+                      (policy.weekdays.includes(day)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/40 text-muted-foreground ring-1 ring-foreground/10 hover:text-foreground")
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-monthday">Day of month</Label>
+              <Input
+                id="wp-monthday"
+                inputMode="numeric"
+                placeholder="1–31"
+                value={policy.month_days[0] ? String(policy.month_days[0]) : ""}
+                onChange={(e) => {
+                  const n = Number(e.target.value.replace(/\D/g, "").slice(0, 2));
+                  patch({ month_days: n >= 1 && n <= 31 ? [n] : [] });
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Date boundary + daily time window (scheduled + recurring) */}
+      {showSchedule && (
+        <div className="mt-3 grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-bound-start">Start date</Label>
+              <Input
+                id="wp-bound-start"
+                type="date"
+                value={startDraft}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-bound-end">End date</Label>
+              <Input
+                id="wp-bound-end"
+                type="date"
+                value={endDraft}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-day-start">Opens at</Label>
+              <Input
+                id="wp-day-start"
+                type="time"
+                value={policy.day_start}
+                onChange={(e) => patch({ day_start: e.target.value || "00:00" })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="wp-day-end">Closes at</Label>
+              <Input
+                id="wp-day-end"
+                type="time"
+                value={policy.day_end}
+                onChange={(e) => patch({ day_end: e.target.value || "23:59" })}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-mode popup message */}
+      {messageMode && (
+        <div className="mt-3 grid gap-1.5">
+          <Label htmlFor="wp-message">Popup message</Label>
+          <Textarea
+            id="wp-message"
+            rows={3}
+            maxLength={500}
+            value={policy.messages[messageMode]}
+            onChange={(e) => patchMessage(e.target.value)}
+            placeholder="Tell users why withdrawals are closed."
+          />
+        </div>
+      )}
+
+      {/* Live summary */}
+      <div className="mt-3 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+        {policy.mode === "open" && <p>Withdrawals are open any time.</p>}
+        {policy.mode === "disabled" && <p>Withdrawals are blocked entirely.</p>}
+        {policy.mode === "scheduled" && (
+          <p>
+            {scheduleSummary(working)}.{" "}
+            {live.open
+              ? "Open now."
+              : live.next_open
+                ? `Closed — opens ${fmtInstant(live.next_open)}.`
+                : "Closed — the window has passed."}
+          </p>
+        )}
+        {policy.mode === "recurring" && (
+          <p>
+            {recurrenceLabel(working)} · {scheduleSummary(working)}.{" "}
+            {live.open
+              ? "Open now."
+              : live.next_open
+                ? `Next opens ${fmtInstant(live.next_open)}.`
+                : "No upcoming opening."}
+          </p>
+        )}
+      </div>
+
+      {notice && <p className="mt-2 text-xs text-emerald-600">{notice}</p>}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+
+      <Button onClick={save} disabled={saving} className="mt-3 w-full">
+        {saving ? "Saving…" : "Save withdrawal window"}
+      </Button>
+    </section>
   );
 }

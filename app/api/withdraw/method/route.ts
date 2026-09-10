@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
+import {
+  DEFAULT_WITHDRAWAL_POLICY,
+  normalizeWithdrawalPolicy,
+  withdrawalPolicyState,
+} from "@/lib/withdrawal-policy";
 
 export const runtime = "nodejs";
 
@@ -8,24 +13,29 @@ function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-type SettingRow = { key: string; value: string | number | boolean };
+type SettingRow = { key: string; value: unknown };
 type PresetRow = { amount: number };
 
 /**
- * GET /api/withdraw/method — how the signed-in user picks a withdrawal amount.
+ * GET /api/withdraw/method — how the signed-in user picks a withdrawal amount
+ * and whether withdrawals are open right now.
  * mode 'input'   → free-form amount field
  * mode 'presets' → fixed-amount buttons (sorted asc)
- * Absent setting defaults to 'input'. The admin controls this on
+ * policy         → the admin's withdrawal window + popup message
+ * Absent settings default to 'input' / open. The admin controls both on
  * /admin → Transactions → Method.
  */
 export async function GET() {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
 
-  const [settingRes, presetsRes] = await Promise.all([
+  const [settingRes, presetsRes, policyRes] = await Promise.all([
     supabaseFetch<SettingRow[]>(`/rest/v1/app_settings?key=eq.withdrawal_mode&limit=1`),
     supabaseFetch<PresetRow[]>(
       `/rest/v1/withdrawal_presets?select=amount&order=amount.asc`
+    ),
+    supabaseFetch<SettingRow[]>(
+      `/rest/v1/app_settings?key=eq.withdrawal_policy&limit=1`
     ),
   ]);
 
@@ -40,5 +50,11 @@ export async function GET() {
       ? (presetsRes.data ?? []).map((p) => Math.round(Number(p.amount) * 100) / 100)
       : [];
 
-  return json(200, { mode, presets });
+  const policyRaw =
+    policyRes.status === 200 && policyRes.data?.length ? policyRes.data[0].value : null;
+  const policy = withdrawalPolicyState(
+    normalizeWithdrawalPolicy(policyRaw ?? DEFAULT_WITHDRAWAL_POLICY)
+  );
+
+  return json(200, { mode, presets, policy });
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { deriveJobStatus } from "@/lib/jobs";
-import { finalizeJobLock } from "@/lib/lock";
+import { completeElapsedJobs, finalizeJobLock } from "@/lib/lock";
 
 export const runtime = "nodejs";
 
@@ -40,18 +40,22 @@ export async function GET() {
   const session = await getSessionUser();
   if (!session) return json(401, { error: "Not signed in" });
 
+  // Free pool nodes from any job whose run time has ended before we read.
+  await completeElapsedJobs();
+
   const nodesRes = await supabaseFetch<NodeRow[]>(
     `/rest/v1/nodes?select=*,tier:node_tiers(code,name,vcpu,ram_gb,gpu,bandwidth)&owner=eq.${session.sub}&order=created_at`
   );
   if (nodesRes.status !== 200) return json(nodesRes.status, { error: nodesRes.error });
   const nodes = nodesRes.data ?? [];
 
-  // Current assignments for these nodes (with the job they point to).
+  // Current assignments for these nodes (with the job they point to). Finished
+  // (completed) assignments are left out so a freed node no longer shows a job.
   let assignments: AssignmentRow[] = [];
   if (nodes.length) {
     const ids = nodes.map((n) => n.id).join(",");
     const assignRes = await supabaseFetch<AssignmentRow[]>(
-      `/rest/v1/assignments?select=node,status,job:jobs(*,company:companies(name))&node=in.(${ids})`
+      `/rest/v1/assignments?select=node,status,job:jobs(*,company:companies(name))&node=in.(${ids})&status=in.(committed,active)`
     );
     assignments = assignRes.status === 200 ? (assignRes.data ?? []) : [];
   }

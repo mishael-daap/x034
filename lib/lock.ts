@@ -92,3 +92,72 @@ export async function finalizeJobLock(jobId: string): Promise<LockResult> {
     transactions_created: transactionsCreated,
   };
 }
+
+type ElapsedJobRow = {
+  id: string;
+  starts_at: string;
+  duration_hours: number;
+  actual_duration_hours: number | null;
+  status: string;
+};
+
+type JobNodeRow = { id: string; node: string };
+
+/**
+ * Settle jobs whose run time has ended: complete their assignments, free the
+ * pool nodes back to 'available', and mark the job 'completed'. Finished jobs
+ * stay visible in the admin marketplace (and can be edited/reused) but drop off
+ * the user marketplace. Idempotent — safe to call on every read.
+ *
+ * Any job that started but wasn't locked yet is locked first (so its earnings
+ * are booked even if nobody opened the job page while it ran).
+ */
+export async function completeElapsedJobs(): Promise<{ completed: number }> {
+  const now = Date.now();
+
+  const jobsRes = await supabaseFetch<ElapsedJobRow[]>(
+    `/rest/v1/jobs?select=id,starts_at,duration_hours,actual_duration_hours,status&status=in.(open,locked)&limit=200`
+  );
+  const jobs = jobsRes.status === 200 ? jobsRes.data ?? [] : [];
+  let completed = 0;
+
+  for (const job of jobs) {
+    // Only jobs whose start + duration has elapsed are done.
+    const start = new Date(job.starts_at).getTime();
+    const dur = job.actual_duration_hours ?? job.duration_hours;
+    if (start + dur * 3_600_000 > now) continue;
+
+    // Book earnings first if the job was never locked (page not visited).
+    if (job.actual_duration_hours == null) {
+      const lock = await finalizeJobLock(job.id);
+      if (!lock.locked) continue;
+    }
+
+    // Free every node still attached to the job.
+    const assignRes = await supabaseFetch<JobNodeRow[]>(
+      `/rest/v1/assignments?select=id,node&job=eq.${job.id}&status=in.(committed,active)`
+    );
+    const assignments = assignRes.status === 200 ? assignRes.data ?? [] : [];
+    if (assignments.length) {
+      await supabaseFetch(
+        `/rest/v1/assignments?job=eq.${job.id}&status=in.(committed,active)`,
+        { method: "PATCH", body: JSON.stringify({ status: "completed" }) }
+      );
+      const nodeIds = [...new Set(assignments.map((a) => a.node))];
+      if (nodeIds.length) {
+        await supabaseFetch(`/rest/v1/nodes?id=in.(${nodeIds.join(",")})`, {
+          method: "PATCH",
+          body: JSON.stringify({ status: "available" }),
+        });
+      }
+    }
+
+    const upd = await supabaseFetch(`/rest/v1/jobs?id=eq.${job.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "completed" }),
+    });
+    if (upd.status < 400) completed++;
+  }
+
+  return { completed };
+}

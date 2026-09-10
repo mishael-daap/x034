@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch } from "@/lib/supabase";
 import { deriveJobStatus, estimateDuration, estimateEarnings, maxPoolSize } from "@/lib/jobs";
+import { completeElapsedJobs } from "@/lib/lock";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,10 @@ const STATUS_RANK: Record<string, number> = { upcoming: 0, locked: 1, in_progres
  * (read-only) while it is working rather than vanishing at start.
  */
 export async function GET() {
+  // Settle finished jobs first: frees their pool nodes and takes them off the
+  // user board (they remain in the admin marketplace).
+  await completeElapsedJobs();
+
   const jobsRes = await supabaseFetch<JobRow[]>(
     `/rest/v1/jobs?select=*,company:companies(name),min_tier:node_tiers(code,name)&order=starts_at`
   );

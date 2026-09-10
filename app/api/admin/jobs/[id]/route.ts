@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
 import { COMMIT_WINDOW_HOURS } from "@/lib/constants";
 import { finalizeJobLock } from "@/lib/lock";
+import { resolveJobCompany } from "@/lib/companies";
 import {
   decimalError,
   startsAtError,
@@ -121,18 +122,25 @@ export async function PATCH(req: Request, { params }: Params) {
     return json(200, { ok: true, action: "open" });
   }
 
-  // ── Field edits: a job that has started is locked — never edit mid-flight.
-  if (job.status !== "open" || new Date(job.starts_at).getTime() <= Date.now()) {
-    return json(409, { error: "This job has already started and can no longer be edited" });
+  // ── Field edits: allow upcoming jobs and finished jobs (edit/reuse), but
+  // never touch a job that is mid-flight (started, not yet ended).
+  const started = new Date(job.starts_at).getTime() <= Date.now();
+  const editable =
+    job.status === "open"
+      ? !started
+      : job.status === "completed" || job.status === "cancelled";
+  if (!editable) {
+    return json(409, { error: "This job has started and can no longer be edited" });
   }
 
   const str = (v: unknown) => (v == null ? "" : String(v));
   const updates: Record<string, unknown> = {};
 
-  if ("company_id" in body) {
-    const v = str(body.company_id).trim();
-    if (!v) return json(400, { error: "Select a company" });
-    updates.company = v;
+  if ("company_id" in body || "company_name" in body) {
+    const resolved = await resolveJobCompany(body);
+    if ("missing" in resolved) return json(400, { error: "Enter or pick a company" });
+    if ("error" in resolved) return json(400, { error: resolved.error });
+    updates.company = resolved.id;
   }
   if ("tier_id" in body) {
     const v = str(body.tier_id).trim();
@@ -167,7 +175,11 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   if ("starts_at" in body) {
     const v = str(body.starts_at).trim();
-    const err = startsAtError(v) ?? timezoneIsoError(v);
+    // Finished jobs may keep/edit their historical start; live jobs must be future.
+    const finished = job.status === "completed" || job.status === "cancelled";
+    const err = finished
+      ? timezoneIsoError(v) ?? (v && !Number.isNaN(Date.parse(v)) ? null : "Pick a valid date and time")
+      : startsAtError(v) ?? timezoneIsoError(v);
     if (err) return json(400, { error: err });
     updates.starts_at = new Date(v).toISOString();
   }
