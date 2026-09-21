@@ -107,8 +107,11 @@ type JobErrors = Partial<
 
 type AdminCompany = { id: string; name: string; jobs_count: number };
 
+type MarketplaceTab = "active" | "completed";
+
 export function AdminMarketplaceClient() {
   const [jobs, setJobs] = useState<AdminJob[] | null>(null);
+  const [tab, setTab] = useState<MarketplaceTab>("active");
   const [companies, setCompanies] = useState<Option[]>([]);
   const [tiers, setTiers] = useState<TierOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -373,6 +376,15 @@ export function AdminMarketplaceClient() {
     load();
   }
 
+  const activeJobs = (jobs ?? []).filter(
+    (j) => j.status === "open" || j.status === "locked"
+  );
+  const completedJobs = (jobs ?? []).filter(
+    (j) => j.status === "completed" || j.status === "cancelled"
+  );
+  const shownJobs = tab === "active" ? activeJobs : completedJobs;
+  const tabCounts = { active: activeJobs.length, completed: completedJobs.length };
+
   return (
     <div className="mx-auto w-full max-w-md p-4 pb-10">
       <header className="mb-4 flex items-start justify-between gap-3">
@@ -399,16 +411,43 @@ export function AdminMarketplaceClient() {
       {notice && <p className="mb-3 text-sm text-emerald-600">{notice}</p>}
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
 
+      <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-card p-1 ring-1 ring-foreground/10">
+        {(
+          [
+            { value: "active", label: "Active jobs" },
+            { value: "completed", label: "Completed jobs" },
+          ] as { value: MarketplaceTab; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setTab(t.value)}
+            className={
+              "rounded-lg py-2 text-sm font-semibold transition-colors " +
+              (tab === t.value
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground")
+            }
+          >
+            {t.label} · {tabCounts[t.value]}
+          </button>
+        ))}
+      </div>
+
       {!jobs ? (
         <div className="grid gap-2">
           <Skeleton className="h-28 w-full rounded-xl" />
           <Skeleton className="h-28 w-full rounded-xl" />
         </div>
-      ) : jobs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No jobs yet. Create the first one.</p>
+      ) : shownJobs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {tab === "active"
+            ? "No active jobs. Create the first one."
+            : "No completed jobs yet."}
+        </p>
       ) : (
         <div className="grid gap-3">
-          {jobs.map((job) => (
+          {shownJobs.map((job) => (
             <div key={job.id} className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -528,31 +567,37 @@ export function AdminMarketplaceClient() {
                 ? "Creates a fresh, open copy of the finished job. The original stays in your history."
                 : editor?.job
                   ? "Edits apply to this job. Finished jobs can still be edited here."
-                  : "Type a company name — new ones are saved to your list. Users see new jobs immediately."}
+                  : "Pick a company from your list. Add new names with the Companies button. Users see new jobs immediately."}
             </DialogDescription>
           </DialogHeader>
           {editor && (
             <div className="grid gap-3">
               <div className="grid gap-1.5">
                 <Label htmlFor="aj-company">Company</Label>
-                <Input
-                  id="aj-company"
-                  list="aj-company-options"
-                  value={editor.form.company}
-                  placeholder="Type or pick a company"
-                  autoComplete="off"
-                  onChange={(e) => {
+                <Select
+                  value={editor.form.company || null}
+                  onValueChange={(v) => {
                     setEditor((prev) =>
-                      prev ? { ...prev, form: { ...prev.form, company: e.target.value } } : prev
+                      prev ? { ...prev, form: { ...prev.form, company: v as string } } : prev
                     );
                     setFormErrors({});
                   }}
-                />
-                <datalist id="aj-company-options">
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.name} />
-                  ))}
-                </datalist>
+                  items={companies.map((c) => ({
+                    value: c.name,
+                    label: c.name,
+                  }))}
+                >
+                  <SelectTrigger id="aj-company" className="w-full">
+                    <SelectValue placeholder="Select a company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FieldError message={formErrors.company} />
               </div>
               <div className="grid gap-1.5">

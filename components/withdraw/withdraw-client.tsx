@@ -211,8 +211,8 @@ export function WithdrawClient() {
     });
 
   const statusBadge = (w: Withdrawal) => {
-    if (w.status === "approved") return <Badge>Approved</Badge>;
-    if (w.status === "declined") return <Badge variant="destructive">Declined</Badge>;
+    if (w.status === "approved") return <Badge>Successful</Badge>;
+    if (w.status === "declined") return <Badge variant="destructive">Failed</Badge>;
     return <Badge variant="outline">Pending</Badge>;
   };
 
