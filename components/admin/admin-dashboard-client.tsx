@@ -13,6 +13,7 @@ type Stats = {
   total_income: number;
   balance: number;
   commission_earned: number;
+  wallet_balance: number;
   pending_withdrawals: number;
   open_jobs: number;
 };
@@ -98,18 +99,24 @@ export function AdminDashboardClient() {
         <p className="mt-4 text-sm text-destructive">{error}</p>
       ) : (
         <>
-          {/* Balance hero — income minus what has been paid out (90% each) */}
+          {/* Admin wallet — withdrawal commission credited here and withdrawable */}
           <section className="mt-4 rounded-xl bg-[linear-gradient(135deg,var(--color-primary),oklch(0.42_0.11_70))] p-6 text-primary-foreground ring-1 ring-black/10">
             <div className="flex items-center gap-2 text-sm text-primary-foreground/70">
               <Wallet className="size-4" />
-              Platform balance
+              Admin wallet
             </div>
             <FitText className="mt-2 font-[var(--font-roboto-mono)] text-5xl font-black tabular-nums tracking-tighter">
-              {money(stats?.balance ?? 0)}
+              {money(stats?.wallet_balance ?? 0)}
             </FitText>
             <p className="mt-1 text-xs text-primary-foreground/70">
-              Income minus approved payouts · 10% of each withdrawal stays here
+              10% commission credited here from every approved payout
             </p>
+            <Link
+              href="/withdraw"
+              className="mt-4 inline-flex h-9 items-center justify-center rounded-lg bg-white/20 text-sm font-semibold text-white transition-colors hover:bg-white/30"
+            >
+              Withdraw
+            </Link>
           </section>
 
           {/* Total income */}

@@ -4,6 +4,7 @@ import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
 import {
+  PLATFORM_USER_ID,
   USD_TO_NGN,
   WITHDRAWAL_PAYOUT_SHARE,
 } from "@/lib/constants";
@@ -159,6 +160,26 @@ export async function POST(req: Request, { params }: Params) {
       return json(502, {
         error: txRes.error ?? "Could not process withdrawal — please retry",
       });
+    }
+
+    // ── Book the 10% commission into the platform (admin) wallet ─────────────
+    if (commission > 0) {
+      const commissionTxRes = await supabaseFetch(`/rest/v1/transactions`, {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify({
+          user_id: PLATFORM_USER_ID,
+          type: "platform_earnings",
+          amount: commission,
+        }),
+      });
+      if (commissionTxRes.status !== 201) {
+        return json(502, {
+          error:
+            commissionTxRes.error ??
+            "Could not credit the platform commission — please retry",
+        });
+      }
     }
 
     const upd = await patchWithdrawal({

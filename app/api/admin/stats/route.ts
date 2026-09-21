@@ -3,6 +3,7 @@ import { supabaseFetch } from "@/lib/supabase";
 import { getSessionUser } from "@/lib/auth/session";
 import { getUserRole } from "@/lib/auth/role";
 import {
+  PLATFORM_USER_ID,
   WITHDRAWAL_COMMISSION_SHARE,
   WITHDRAWAL_PAYOUT_SHARE,
 } from "@/lib/constants";
@@ -33,13 +34,14 @@ export async function GET() {
   const role = await getUserRole(session.sub);
   if (role !== "admin") return json(403, { error: "Admin access required" });
 
-  const [usersRes, nodesRes, jobsRes, depositsRes, approvedRes, pendingRes] = await Promise.all([
+  const [usersRes, nodesRes, jobsRes, depositsRes, approvedRes, pendingRes, walletRes] = await Promise.all([
     supabaseFetch<{ id: string }[]>(`/rest/v1/users?select=id&role=eq.user`),
     supabaseFetch<{ id: string }[]>(`/rest/v1/nodes?select=id`),
     supabaseFetch<{ id: string }[]>(`/rest/v1/jobs?select=id&status=eq.open`),
     supabaseFetch<{ amount: number }[]>(`/rest/v1/transactions?select=amount&type=eq.funding`),
     supabaseFetch<{ amount: number }[]>(`/rest/v1/withdrawals?select=amount&status=eq.approved`),
     supabaseFetch<{ amount: number }[]>(`/rest/v1/withdrawals?select=amount&status=eq.pending`),
+    supabaseFetch<{ balance: number }[]>(`/rest/v1/user_balances?select=balance&user_id=eq.${PLATFORM_USER_ID}`),
   ]);
 
   const deposits = depositsRes.status === 200 ? (depositsRes.data ?? []) : [];
@@ -50,12 +52,18 @@ export async function GET() {
   const payouts = approvedTotal * WITHDRAWAL_PAYOUT_SHARE;
   const commission = approvedTotal * WITHDRAWAL_COMMISSION_SHARE;
 
+  const walletBalance =
+    walletRes.status === 200 && walletRes.data?.length
+      ? Number(walletRes.data[0].balance ?? 0)
+      : 0;
+
   const stats = {
     total_users: usersRes.status === 200 ? (usersRes.data ?? []).length : 0,
     total_nodes: nodesRes.status === 200 ? (nodesRes.data ?? []).length : 0,
     total_income: money(totalIncome),
     balance: money(totalIncome - payouts),
     commission_earned: money(commission),
+    wallet_balance: money(walletBalance),
     pending_withdrawals: pendingRes.status === 200 ? (pendingRes.data ?? []).length : 0,
     open_jobs: jobsRes.status === 200 ? (jobsRes.data ?? []).length : 0,
   };
