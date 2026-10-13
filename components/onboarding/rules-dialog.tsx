@@ -49,7 +49,7 @@ const STEPS: Step[] = [
   {
     icon: HandCoins,
     title: "Deposit & withdraw",
-    body: "Top up your wallet with test funds or withdraw your balance — requests are reviewed and paid by the platform.",
+    body: "Top up your wallet with a card payment or withdraw your balance — requests are reviewed and paid by the platform.",
   },
 ];
 

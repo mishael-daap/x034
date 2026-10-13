@@ -1,16 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowDownToLine,
-  ArrowLeft,
-  Check,
-  CreditCard,
-  FlaskConical,
-  Wallet,
-} from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,16 +16,12 @@ const PRESETS = [10, 25, 50, 100, 200];
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type Mode = "card" | "test";
-
 export function DepositClient({ prefillAmount }: { prefillAmount?: number | null }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("card");
   const [balance, setBalance] = useState<number | null>(null);
   const [amount, setAmount] = useState(prefillAmount && prefillAmount > 0 ? String(prefillAmount) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deposited, setDeposited] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -82,27 +70,6 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
     }
   }
 
-  async function handleTest() {
-    if (!amountValid || busy || balance == null) return;
-    setBusy(true);
-    setError(null);
-    setDeposited(false);
-    const res = await fetch("/api/deposits", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: amountCents / 100 }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const d = await res.json().catch(() => null);
-      setError(d?.error ?? "Could not complete deposit");
-      return;
-    }
-    const d = await res.json().catch(() => null);
-    if (d?.balance != null) setBalance(Number(d.balance));
-    setDeposited(true);
-  }
-
   return (
     <div className="mx-auto w-full max-w-md p-6">
       {/* Back + settings */}
@@ -120,7 +87,7 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
 
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Deposit</h1>
       <p className="text-sm text-muted-foreground">
-        Top up your wallet with a card payment or instant test funds.
+        Top up your wallet with a card payment.
       </p>
 
       {balance == null ? (
@@ -137,42 +104,6 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
         </section>
       )}
 
-      {/* Method picker */}
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-card p-1 ring-1 ring-foreground/10">
-        <button
-          type="button"
-          onClick={() => {
-            setMode("card");
-            setError(null);
-          }}
-          className={
-            "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors " +
-            (mode === "card"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground")
-          }
-        >
-          <CreditCard className="size-4" />
-          Card (Paystack)
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode("test");
-            setError(null);
-          }}
-          className={
-            "flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors " +
-            (mode === "test"
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground")
-          }
-        >
-          <FlaskConical className="size-4" />
-          Test funds
-        </button>
-      </div>
-
       <div className="mt-5 grid gap-1.5">
         <Label htmlFor="deposit-amount">Amount (USD)</Label>
         <Input
@@ -185,7 +116,6 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
           onChange={(e) => {
             setAmount(e.target.value);
             setError(null);
-            setDeposited(false);
           }}
         />
         <div className="flex flex-wrap gap-2">
@@ -196,7 +126,6 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
               onClick={() => {
                 setAmount(String(p));
                 setError(null);
-                setDeposited(false);
               }}
               className={
                 "rounded-full px-3 py-1 text-xs font-medium transition-colors " +
@@ -212,31 +141,15 @@ export function DepositClient({ prefillAmount }: { prefillAmount?: number | null
         <FieldError message={amountErr} />
       </div>
 
-      {error ? (
-        <p className="mt-4 text-sm text-destructive">{error}</p>
-      ) : deposited ? (
-        <p className="mt-4 flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-          <Check className="size-4" />
-          Deposited {money(amountCents / 100)}.{" "}
-          <Link href="/me" className="underline underline-offset-4">
-            Back to profile
-          </Link>
-        </p>
-      ) : null}
+      {error ? <p className="mt-4 text-sm text-destructive">{error}</p> : null}
 
       <Button
-        onClick={mode === "card" ? handleCard : handleTest}
-        disabled={!amountValid || busy || (mode === "test" && balance == null)}
+        onClick={handleCard}
+        disabled={!amountValid || busy}
         className="mt-4 h-11 w-full"
       >
         <ArrowDownToLine />
-        {busy
-          ? mode === "card"
-            ? "Contacting Paystack…"
-            : "Depositing…"
-          : mode === "card"
-            ? "Pay"
-            : "Add test funds"}
+        {busy ? "Contacting Paystack…" : "Pay"}
       </Button>
     </div>
   );
