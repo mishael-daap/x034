@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseFetch } from "@/lib/supabase";
+import { listBanks } from "@/lib/banks";
 
 export const runtime = "nodejs";
 
@@ -7,11 +7,12 @@ function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
 }
 
-/** GET /api/banks — seeded banks for the profile account-details dropdown. */
+/**
+ * GET /api/banks — every bank Paystack can transfer to (NGN NUBAN only).
+ * Read from the local catalogue, refreshed from Paystack when empty or stale.
+ * In sandbox mode the list also carries "Test Bank (sandbox)" (code 001).
+ */
 export async function GET() {
-  const res = await supabaseFetch<{ id: string; name: string }[]>(
-    `/rest/v1/banks?select=id,name&order=name`
-  );
-  if (res.status !== 200) return json(res.status, { error: res.error });
-  return json(200, { banks: res.data ?? [] });
+  const banks = await listBanks();
+  return json(200, { banks });
 }

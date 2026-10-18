@@ -28,12 +28,14 @@ type WithdrawMethod = { mode: "input" | "presets"; presets: number[] };
 type Withdrawal = {
   id: string;
   amount: number; // positive
-  status: "pending" | "approved" | "declined";
+  status: "pending" | "processing" | "paid" | "failed" | "declined";
   reason: string | null;
   bank_name: string | null;
   account_number: string | null;
+  account_name: string | null;
   created_at: string;
   decided_at: string | null;
+  payout: { status: string; failure_reason: string | null; amount_usd: number } | null;
 };
 
 type Bank = { id: string; name: string };
@@ -42,6 +44,7 @@ type Destination = {
   bank_id: string | null;
   bank_name: string | null;
   account_number: string | null;
+  account_name: string | null;
 };
 
 const money = (n: number) =>
@@ -61,6 +64,8 @@ export function WithdrawClient() {
   const [method, setMethod] = useState<WithdrawMethod>({ mode: "input", presets: [] });
   // When withdrawals are allowed (admin-controlled window) + the popup copy.
   const [policy, setPolicy] = useState<WithdrawalPolicyState | null>(null);
+  // USD→NGN rate from the server, for the "you receive ₦X" preview.
+  const [rate, setRate] = useState(1400);
   const [closedPopup, setClosedPopup] = useState<{
     message: string;
     nextOpen: string | null;
@@ -96,6 +101,7 @@ export function WithdrawClient() {
       setWithdrawals(w.withdrawals ?? []);
       setMethod(m?.mode === "presets" ? { mode: "presets", presets: m.presets ?? [] } : { mode: "input", presets: [] });
       setPolicy(m?.policy ?? null);
+      if (typeof m?.usd_to_ngn === "number" && m.usd_to_ngn > 0) setRate(m.usd_to_ngn);
       const u = me.user;
       setDestination(
         u
@@ -103,6 +109,7 @@ export function WithdrawClient() {
               bank_id: u.bank?.id ?? null,
               bank_name: u.bank?.name ?? null,
               account_number: u.account_number ?? null,
+              account_name: u.account_name ?? null,
             }
           : null
       );
@@ -122,8 +129,15 @@ export function WithdrawClient() {
   const amountCents = amountValid ? Math.round(parsed * 100) : 0;
   const remaining = (cents - amountCents) / 100;
   const exceeds = amountValid && remaining < 0;
-  const canWithdraw = amountValid && !exceeds && !withdrawing && balance != null;
-  const hasDestination = Boolean(destination?.bank_name && destination.account_number);
+  const activeRequest =
+    withdrawals.find((w) => w.status === "pending" || w.status === "processing") ?? null;
+  const canWithdraw =
+    amountValid && !exceeds && !withdrawing && balance != null && !activeRequest;
+  const hasDestination = Boolean(
+    destination?.bank_name && destination.account_number && destination.account_name
+  );
+  // What actually lands in the bank: 90% of the request at the fixed rate.
+  const payoutNgn = amountValid && rate > 0 ? Math.round(parsed * 0.9 * rate * 100) / 100 : 0;
 
   // Bank dialog: require a bank + valid 10-digit account, or both empty (clear).
   const acctErr = accountNumberError(accountNumber, { required: !!bankId }) ?? undefined;
@@ -168,6 +182,7 @@ export function WithdrawClient() {
         bank_id: u.bank?.id ?? null,
         bank_name: u.bank?.name ?? null,
         account_number: u.account_number ?? null,
+        account_name: u.account_name ?? null,
       });
     }
     setBankOpen(false);
@@ -211,9 +226,11 @@ export function WithdrawClient() {
     });
 
   const statusBadge = (w: Withdrawal) => {
-    if (w.status === "approved") return <Badge>Successful</Badge>;
-    if (w.status === "declined") return <Badge variant="destructive">Failed</Badge>;
-    return <Badge variant="outline">Pending</Badge>;
+    if (w.status === "paid") return <Badge>Paid</Badge>;
+    if (w.status === "processing") return <Badge variant="outline">Processing</Badge>;
+    if (w.status === "failed") return <Badge variant="destructive">Failed · refunded</Badge>;
+    if (w.status === "declined") return <Badge variant="destructive">Declined</Badge>;
+    return <Badge variant="outline">Pending review</Badge>;
   };
 
   return (
@@ -300,6 +317,18 @@ export function WithdrawClient() {
           </p>
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
+        ) : amountValid ? (
+          <p className="text-sm text-muted-foreground">
+            You receive{" "}
+            <span className="font-medium text-foreground">
+              ₦
+              {payoutNgn.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>{" "}
+            · 10% commission · ₦{rate.toLocaleString("en-US")}/$
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">
             A 10% commission applies on all withdrawals.
@@ -315,8 +344,15 @@ export function WithdrawClient() {
             <p className="truncate text-sm font-medium">
               {hasDestination
                 ? `${destination.bank_name} ${maskAccount(destination.account_number)}`
-                : "No payout account set"}
+                : destination.bank_name
+                  ? `${destination.bank_name} — unverified`
+                  : "No payout account set"}
             </p>
+            {destination.account_name && (
+              <p className="truncate text-xs text-muted-foreground">
+                {destination.account_name}
+              </p>
+            )}
           </div>
           <button
             onClick={openBankEditor}
@@ -333,13 +369,19 @@ export function WithdrawClient() {
         className="mt-4 w-full"
       >
         <ArrowUpFromLine />
-        {withdrawing ? "Withdrawing…" : "Withdraw"}
+        {withdrawing ? "Requesting…" : "Withdraw"}
       </Button>
-      {!hasDestination && destination && (
+      {activeRequest ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          Add your bank details before requesting a withdrawal.
+          You already have a withdrawal in progress. You can request another once it
+          settles.
         </p>
-      )}
+      ) : !hasDestination && destination ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Verify your bank account (bank + 10-digit number) before requesting a
+          withdrawal.
+        </p>
+      ) : null}
 
       <h2 className="mt-8 text-sm font-medium text-muted-foreground">Withdrawals</h2>
       {withdrawals.length === 0 ? (
@@ -363,6 +405,17 @@ export function WithdrawClient() {
                 </p>
                 {w.status === "declined" && w.reason && (
                   <p className="mt-0.5 break-words text-xs text-destructive/80">{w.reason}</p>
+                )}
+                {w.status === "failed" && (
+                  <p className="mt-0.5 break-words text-xs text-destructive/80">
+                    {w.payout?.failure_reason ?? "Transfer failed"} — the amount was
+                    returned to your balance.
+                  </p>
+                )}
+                {w.status === "processing" && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Paying out — the transfer is on its way to your bank.
+                  </p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">{statusBadge(w)}</div>

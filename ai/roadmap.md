@@ -76,24 +76,16 @@ Scope:
 - Guards: `/admin/*` routes require `role = 'admin'` (redirect to `/` otherwise); the platform admin keeps access to the normal user app
 
 ## 6. Bank Payouts via Paystack Transfers (real withdrawals)
-Status: pending (brainstorming — no spec yet)
-Goal: Make an approved withdrawal actually pay out to the user's bank account, and let users pick from the **full set of banks Paystack supports** rather than the 4 seeded ones. A partial implementation already exists (`lib/paystack.ts` `paystackCreateRecipient`/`paystackInitiateTransfer`; admin `mode: simulated | paystack` toggle in `POST /api/withdrawals/[id]/decision`; Paystack reference in `ai/dependencies/paystack/transfers.md`), but it is capped by a hardcoded 4-bank name→code map, no account-name verification, no persisted transfer record, no webhook reconciliation, and it books the ledger as `processed` at queue time. This item completes the loop.
+Status: in development
+Goal: Make an approved withdrawal actually pay out to the user's bank account through Paystack Transfers, and replace the 4 seeded banks with the full set of banks Paystack supports. The admin's approval is the single trigger — the transfer fires immediately, with the verified account name and NGN amount shown before confirming. Spec: `ai/features/paystack-bank-payouts/`.
 
-Known gaps to close:
-- **Bank catalogue**: `/api/banks` reads the seeded `banks` table (First Bank, Zenith, GTBank, Access) and `lib/paystack.ts` hardcodes `BANK_CODE_BY_NAME` for only those names. Fetch the live list from `GET /bank?country=nigeria&currency=NGN` (cached) and store/select any supported bank with its Paystack `code`.
-- **Account verification**: users currently type `account_name` by hand. Use `GET /bank/resolve?account_number=&bank_code=` at profile save (and again before payout) so the name is Paystack-verified and transfers don't fail on mismatch.
-- **Recipient reuse**: persist the `recipient_code` (RCP_…) per user/destination instead of re-creating it on every payout.
-- **Transfer record + idempotency**: persist each payout (unique reference, amount kobo, recipient_code, Paystack `transfer_code`, status, failure reason) before calling Paystack; today the reference only lives as free text in `withdrawals.reason`. Retry by verifying the reference, never by re-sending a new one.
-- **Status lifecycle + webhooks**: add `POST /api/webhooks/paystack` verifying `x-paystack-signature` (HMAC-SHA512 of the raw body), handling `transfer.success` / `transfer.failed` / `transfer.reversed`, idempotently. A `POST /transfer` success only means *queued*; the ledger must not be treated as final until the webhook (or a verify poll) confirms.
-- **Failure/refund path**: if a transfer fails or reverses, restore the user's balance (or leave the request pending) instead of losing the money.
-- **Payment mode**: decide whether `paystack` becomes the only real payout mode (keeping `simulated` for local/dev) and whether the admin picks per request or the platform does.
-
-Open questions (to settle before a spec):
-1. **Currency/rate**: balances are USD, Paystack pays NGN. Is Paystack USD payout available on the account, or do we convert at a rate? If converting, where does the live rate come from (the hardcoded `USD_TO_NGN = 1400` is sandbox-only) and does the user see the NGN figure before confirming?
-2. **Bank scope**: Nigeria NGN NUBAN only for now, or also Ghana (GHIPSS), Kenya (mobile money), South Africa? Each adds a transfer `type` and different validation.
-3. **OTP**: disable the Transfers OTP requirement (needed for programmatic/bulk payouts) or handle `status: "otp"` via `POST /transfer/finalize_transfer`?
-4. **Who bears the Paystack fee** (`fee_charged`) — the platform's 10% commission, the user's payout, or unchanged?
-5. **Manual review**: admin approval stays the single human gate, or add a second confirmation showing the verified account name and NGN amount before the transfer fires?
-6. **Balance check**: read Paystack's `GET /balance` before initiating, and what to do when the Paystack balance is too low.
-7. **Verification source of truth**: webhook only, or also poll `GET /transfer/verify/:reference` for requests never confirmed (webhooks can be missed locally)?
-8. **Failure UX**: what the requesting user sees while a payout is `queued` / `otp` / `failed` / `reversed` on `/withdraw` and in transaction history.
+Scope:
+- Migration 0012: `banks.code` / `banks.currency`, `users.account_name`, `payouts` + `transfer_recipients` tables, `withdrawals` statuses `pending | processing | paid | failed | declined`, `withdrawal_refund` ledger type
+- Full Paystack NGN bank catalogue synced locally (only `supports_transfer` banks), searchable picker on Me; sandbox "Test Bank (001)" in test mode only
+- Account names resolved by Paystack at profile save and stored; re-checked (best-effort) at approval
+- `POST /api/withdrawals/[id]/decision` approve path: balance check → name check → Paystack balance check → recipient reuse → payout row before the API call → debit + `processing` → transfer (`queued` / `otp_required`)
+- Webhook `POST /api/webhooks/paystack` (HMAC-SHA512, idempotent) + admin Check status / OTP finalize / Retry
+- Failure and reversal refund the full debit once; platform commission is credited only on confirmed success
+- Simulated payouts removed; admin UI shows verified destination, ₦ amount and payout state
+- Open questions settled: NGN NUBAN only, fixed `USD_TO_NGN` rate snapshotted per payout, platform bears the Paystack fee, admin approval stays the single human gate, webhook primary + manual verify fallback
+- Verification note: the payout engine is built and runs to the Paystack call. Delivering money is blocked until the Paystack business is upgraded from "starter" — Paystack refuses third-party payouts for starter accounts. Remaining checks in `ai/features/paystack-bank-payouts/tasks.md`

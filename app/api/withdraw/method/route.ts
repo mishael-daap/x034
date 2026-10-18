@@ -6,6 +6,7 @@ import {
   normalizeWithdrawalPolicy,
   withdrawalPolicyState,
 } from "@/lib/withdrawal-policy";
+import { USD_TO_NGN } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,8 @@ type PresetRow = { amount: number };
  * mode 'input'   → free-form amount field
  * mode 'presets' → fixed-amount buttons (sorted asc)
  * policy         → the admin's withdrawal window + popup message
+ * rate           → USD_TO_NGN, for the "you receive ₦X" preview (payouts are
+ *                  executed at this rate, snapshotted per payout record)
  * Absent settings default to 'input' / open. The admin controls both on
  * /admin → Transactions → Method.
  */
@@ -56,5 +59,5 @@ export async function GET() {
     normalizeWithdrawalPolicy(policyRaw ?? DEFAULT_WITHDRAWAL_POLICY)
   );
 
-  return json(200, { mode, presets, policy });
+  return json(200, { mode, presets, policy, usd_to_ngn: USD_TO_NGN });
 }

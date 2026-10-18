@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, CheckCircle2, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +18,15 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsMenu } from "@/components/app-shell/settings-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { USD_TO_NGN } from "@/lib/constants";
 import {
   Select,
   SelectContent,
@@ -27,10 +45,22 @@ import {
   type WithdrawalRecurrence,
 } from "@/lib/withdrawal-policy";
 
+type PayoutState = {
+  id: string;
+  status: string; // initialized | queued | otp_required | success | failed | reversed
+  failure_reason: string | null;
+  amount_usd: number;
+  amount_kobo: number;
+  transfer_code: string | null;
+  fee_charged: number | null;
+  attempt: number;
+  refunded: boolean;
+};
+
 type AdminWithdrawal = {
   id: string;
   amount: number; // positive (requested)
-  status: "pending" | "approved" | "declined";
+  status: "pending" | "processing" | "paid" | "failed" | "declined";
   reason: string | null;
   bank_name: string | null;
   account_number: string | null;
@@ -38,14 +68,17 @@ type AdminWithdrawal = {
   created_at: string;
   decided_at: string | null;
   requester: { name: string; email: string | null } | null;
+  payout: PayoutState | null;
 };
 
-type Filter = "all" | "pending" | "approved" | "declined";
-type PayoutMode = "simulated" | "paystack";
+type Filter = "all" | "pending" | "processing" | "paid" | "failed" | "declined";
 type Tab = "transactions" | "method";
 
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const naira = (n: number) =>
+  `₦${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const dateLabel = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -65,8 +98,8 @@ export function AdminTransactionsClient() {
           <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
           {tab === "transactions" && (
             <p className="text-sm text-muted-foreground">
-              Withdrawal requests from all users. Approve to pay out 90% — 10% commission stays
-              with the platform.
+              Withdrawal requests. Approving sends a real Paystack transfer — 90% to
+              the user, 10% commission on success.
             </p>
           )}
         </div>
@@ -108,8 +141,11 @@ function TransactionsQueue() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // Per-request payout mode (default simulated; Paystack = real transfer).
-  const [modes, setModes] = useState<Record<string, PayoutMode>>({});
+  // Approval confirmation: shows the verified name and naira amount first.
+  const [confirming, setConfirming] = useState<AdminWithdrawal | null>(null);
+  // OTP entry for payouts stuck at `otp_required`.
+  const [otpFor, setOtpFor] = useState<AdminWithdrawal | null>(null);
+  const [otp, setOtp] = useState("");
 
   const load = useCallback(() => {
     fetch("/api/admin/withdrawals")
@@ -130,49 +166,154 @@ function TransactionsQueue() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        action === "decline"
-          ? { action, reason: reason || null }
-          : { action, mode: modes[w.id] ?? "simulated" }
+        action === "decline" ? { action, reason: reason || null } : { action }
       ),
     });
     setBusyId(null);
+    setConfirming(null);
     if (!res.ok) {
       const d = await res.json().catch(() => null);
       setError(d?.error ?? "Could not update withdrawal");
+      load();
       return;
     }
     const d = await res.json().catch(() => null);
     const updated = d?.withdrawal;
-    if (updated?.status === "declined") {
+    if (d?.declined || updated?.status === "declined") {
       setNotice(
         updated?.reason === "Insufficient balance"
           ? `Request for ${money(w.amount)} was declined — the requester's balance no longer covers it.`
           : `Request for ${money(w.amount)} declined — no money moved.`
       );
-    }
-    if (updated?.status === "approved") {
+    } else if (updated?.status === "processing") {
       setNotice(
-        d?.payout != null && (modes[w.id] ?? "simulated") === "paystack"
-          ? `Approved ${money(w.amount)} — ${money(d.payout)} paid via Paystack, 10% commission kept.`
-          : `Approved ${money(w.amount)} (${modes[w.id] ?? "simulated"} payout).`
+        `Approved ${money(w.amount)} — transfer queued: ${naira(
+          (d?.payout_usd ?? w.amount * 0.9) * USD_TO_NGN
+        )} to ${w.account_name ?? "the user"}. Commission is credited when Paystack confirms.`
       );
     }
+    load();
+  }
+
+  async function checkStatus(w: AdminWithdrawal) {
+    if (!w.payout) return;
+    setBusyId(w.id);
+    setNotice(null);
+    setError(null);
+    const res = await fetch(`/api/payouts/${w.payout.id}/verify`, { method: "POST" });
+    setBusyId(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Could not check the transfer");
+      return;
+    }
+    const d = await res.json().catch(() => null);
+    const status = d?.settlement?.status ?? d?.payout?.status;
+    if (status === "success") {
+      setNotice(
+        `Transfer confirmed — ${money(w.payout.amount_usd)} arrived. 10% commission credited.`
+      );
+    } else if (status === "failed" || status === "reversed") {
+      setNotice(`Transfer ${status} — the full ${money(w.amount)} was refunded to the user.`);
+    } else {
+      setNotice("Paystack is still processing this transfer. Check again shortly.");
+    }
+    load();
+  }
+
+  async function retry(w: AdminWithdrawal) {
+    setBusyId(w.id);
+    setNotice(null);
+    setError(null);
+    const res = await fetch(`/api/withdrawals/${w.id}/retry`, { method: "POST" });
+    setBusyId(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Could not retry the payout");
+      load();
+      return;
+    }
+    setNotice(`Retry queued for ${money(w.amount)} — the funds stayed held.`);
+    load();
+  }
+
+  async function submitOtp() {
+    if (!otpFor?.payout) return;
+    setBusyId(otpFor.id);
+    setNotice(null);
+    setError(null);
+    const res = await fetch(`/api/payouts/${otpFor.payout.id}/otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otp }),
+    });
+    setBusyId(null);
+    if (!res.ok) {
+      const d = await res.json().catch(() => null);
+      setError(d?.error ?? "Paystack rejected the OTP");
+      return;
+    }
+    setOtp("");
+    setOtpFor(null);
+    setNotice("OTP accepted — the transfer is on its way.");
     load();
   }
 
   const counts = {
     all: all?.length ?? 0,
     pending: all?.filter((w) => w.status === "pending").length ?? 0,
-    approved: all?.filter((w) => w.status === "approved").length ?? 0,
+    processing: all?.filter((w) => w.status === "processing").length ?? 0,
+    paid: all?.filter((w) => w.status === "paid").length ?? 0,
+    failed: all?.filter((w) => w.status === "failed").length ?? 0,
     declined: all?.filter((w) => w.status === "declined").length ?? 0,
   };
 
   const shown = (all ?? []).filter((w) => filter === "all" || w.status === filter);
 
   const statusBadge = (w: AdminWithdrawal) => {
-    if (w.status === "approved") return <Badge>Approved</Badge>;
+    if (w.status === "paid") return <Badge>Paid</Badge>;
+    if (w.status === "processing") return <Badge variant="outline">Processing</Badge>;
+    if (w.status === "failed") return <Badge variant="destructive">Failed</Badge>;
     if (w.status === "declined") return <Badge variant="destructive">Declined</Badge>;
     return <Badge variant="outline">Pending</Badge>;
+  };
+
+  const payoutLine = (w: AdminWithdrawal) => {
+    const p = w.payout;
+    if (!p) return null;
+    if (p.status === "success") {
+      return (
+        <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
+          <CheckCircle2 className="size-3.5 shrink-0" />
+          Transfer confirmed · {money(p.amount_usd)} · fee{" "}
+          {p.fee_charged == null ? "—" : `₦${p.fee_charged}`} (platform)
+        </p>
+      );
+    }
+    if (p.status === "failed" || p.status === "reversed") {
+      return (
+        <p className="mt-1 flex items-start gap-1 break-words text-xs text-destructive/80">
+          <XCircle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            {p.status === "reversed" ? "Reversed" : "Failed"}
+            {p.failure_reason ? ` — ${p.failure_reason}` : ""}
+            {p.refunded ? " · full amount refunded" : " · funds still held, retry available"}
+          </span>
+        </p>
+      );
+    }
+    if (p.status === "otp_required") {
+      return (
+        <p className="mt-1 text-xs text-amber-600">
+          Waiting for the transfer OTP from Paystack.
+        </p>
+      );
+    }
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        Transfer queued with Paystack (attempt {p.attempt}).
+      </p>
+    );
   };
 
   return (
@@ -180,21 +321,23 @@ function TransactionsQueue() {
       {/* Filter chips */}
       {all && (
         <div className="flex flex-wrap gap-2">
-          {(["all", "pending", "approved", "declined"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={
-                "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors " +
-                (filter === f
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground ring-1 ring-foreground/10 hover:text-foreground")
-              }
-            >
-              {f} · {counts[f]}
-            </button>
-          ))}
+          {(["all", "pending", "processing", "paid", "failed", "declined"] as Filter[]).map(
+            (f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors " +
+                  (filter === f
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground ring-1 ring-foreground/10 hover:text-foreground")
+                }
+              >
+                {f} · {counts[f]}
+              </button>
+            )
+          )}
         </div>
       )}
 
@@ -247,8 +390,12 @@ function TransactionsQueue() {
 
                 <p className="mt-2 break-words text-xs text-muted-foreground">
                   {w.bank_name ?? "—"} · {w.account_number ?? "—"}
-                  {w.account_name ? ` · ${w.account_name}` : ""}
                 </p>
+                {w.account_name && (
+                  <p className="break-words text-xs font-medium text-muted-foreground">
+                    Verified: {w.account_name}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Requested {dateLabel(w.created_at)}
                   {w.decided_at ? ` · Decided ${dateLabel(w.decided_at)}` : ""}
@@ -259,52 +406,70 @@ function TransactionsQueue() {
                     <span className="break-words">{w.reason}</span>
                   </p>
                 )}
-                {w.status === "approved" && w.reason && (
-                  <p className="mt-1 flex items-center gap-1 break-words text-xs text-muted-foreground">
-                    <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" />
-                    {w.reason}
-                  </p>
-                )}
+                {payoutLine(w)}
 
                 {w.status === "pending" && (
-                  <div className="mt-3 grid gap-2">
-                    <Select
-                      value={modes[w.id] ?? "simulated"}
-                      onValueChange={(v) =>
-                        setModes((m) => ({ ...m, [w.id]: v as PayoutMode }))
-                      }
-                      items={[
-                        { value: "simulated", label: "Simulated payout (test)" },
-                        { value: "paystack", label: "Real payout via Paystack" },
-                      ]}
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busyId === w.id}
+                      onClick={() => setConfirming(w)}
+                      className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
                     >
-                      <SelectTrigger className="w-full" aria-label="Payout mode">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="simulated">Simulated payout (test)</SelectItem>
-                        <SelectItem value="paystack">Real payout via Paystack</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={busyId === w.id}
-                        onClick={() => decide(w, "approve")}
-                        className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-                      >
-                        {busyId === w.id ? "…" : "Approve"}
-                      </Button>
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busyId === w.id}
+                      onClick={() => decide(w, "decline")}
+                      className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      Decline
+                    </Button>
+                  </div>
+                )}
+
+                {w.status === "processing" && w.payout && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(w.payout.status === "queued" ||
+                      w.payout.status === "initialized" ||
+                      w.payout.status === "otp_required") && (
                       <Button
                         size="sm"
                         variant="outline"
                         disabled={busyId === w.id}
-                        onClick={() => decide(w, "decline")}
-                        className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => checkStatus(w)}
+                        className="flex-1"
                       >
-                        Decline
+                        <RefreshCw className="size-3.5" />
+                        Check status
                       </Button>
-                    </div>
+                    )}
+                    {w.payout.status === "otp_required" && (
+                      <Button
+                        size="sm"
+                        disabled={busyId === w.id}
+                        onClick={() => {
+                          setOtp("");
+                          setOtpFor(w);
+                        }}
+                        className="flex-1"
+                      >
+                        Enter OTP
+                      </Button>
+                    )}
+                    {w.payout.status === "failed" && !w.payout.refunded && (
+                      <Button
+                        size="sm"
+                        disabled={busyId === w.id}
+                        onClick={() => retry(w)}
+                        className="flex-1"
+                      >
+                        <RotateCcw className="size-3.5" />
+                        Retry payout
+                      </Button>
+                    )}
                   </div>
                 )}
               </li>
@@ -312,6 +477,105 @@ function TransactionsQueue() {
           })}
         </ul>
       )}
+
+      {/* Approval confirmation — verified name + naira amount before money moves */}
+      <Dialog
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send {confirming ? money(confirming.amount * 0.9) : ""}?</DialogTitle>
+            <DialogDescription>
+              This fires a real Paystack transfer. Check the verified name carefully —
+              it cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {confirming && (
+            <div className="grid gap-2 text-sm">
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">Verified account name</p>
+                <p className="font-medium">{confirming.account_name ?? "Not verified"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {confirming.bank_name ?? "—"} · {confirming.account_number ?? "—"}
+                </p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Request amount</span>
+                <span className="font-mono font-semibold">{money(confirming.amount)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">User receives (90%)</span>
+                <span className="font-mono font-semibold text-emerald-600">
+                  {money(confirming.amount * 0.9)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  Bank gets (₦{USD_TO_NGN.toLocaleString("en-US")}/$)
+                </span>
+                <span className="font-mono font-semibold">
+                  {naira(confirming.amount * 0.9 * USD_TO_NGN)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Platform commission</span>
+                <span className="font-mono font-semibold">{money(confirming.amount * 0.1)}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busyId === confirming?.id}
+              onClick={() => confirming && decide(confirming, "approve")}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              {busyId === confirming?.id ? "Sending…" : "Approve & send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* OTP finalize (only when the Paystack account still requires it) */}
+      <Dialog
+        open={otpFor !== null}
+        onOpenChange={(open) => {
+          if (!open) setOtpFor(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter transfer OTP</DialogTitle>
+            <DialogDescription>
+              Paystack sent a one-time code to the business phone number. The transfer
+              is held until it is entered.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            inputMode="numeric"
+            maxLength={8}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+            placeholder="e.g. 123456"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOtpFor(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busyId === otpFor?.id || otp.length < 4}
+              onClick={submitOtp}
+            >
+              Finalize transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

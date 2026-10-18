@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  BadgeCheck,
   Check,
   Copy,
   Loader2,
@@ -32,7 +33,8 @@ type Profile = {
   email: string | null;
   phone: string | null;
   account_number: string | null;
-  bank: { id: string; name: string } | null;
+  account_name: string | null;
+  bank: { id: string; name: string; code?: string | null } | null;
 };
 
 type Bank = { id: string; name: string };
@@ -63,7 +65,7 @@ export function MeClient() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<
-    Partial<Record<"name" | "email" | "phone" | "account_number", string>>
+    Partial<Record<"name" | "email" | "phone" | "bank" | "account_number", string>>
   >({});
 
   // Editable field state (initialised once the profile loads).
@@ -129,16 +131,21 @@ export function MeClient() {
     }
   }
 
-  function clearField(field: "name" | "email" | "phone" | "account_number") {
+  function clearField(field: "name" | "email" | "phone" | "bank" | "account_number") {
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
   async function handleSave() {
+    // Bank and account number travel as a pair — the server resolves the name.
     const next = {
       name: nameError(name) ?? undefined,
       email: emailError(email) ?? undefined,
       phone: phoneError(phone) ?? undefined,
-      account_number: accountNumberError(accountNumber) ?? undefined,
+      bank: !bankId && accountNumber ? "Select your bank" : undefined,
+      account_number:
+        bankId && !accountNumber
+          ? "Enter your account number"
+          : (accountNumberError(accountNumber) ?? undefined),
     };
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
@@ -186,6 +193,15 @@ export function MeClient() {
       bankId !== (profile.bank?.id ?? "") ||
       accountNumber !== (profile.account_number ?? "")
     : false;
+
+  // The stored Paystack-verified name only applies while the saved bank and
+  // account number are untouched.
+  const destinationChanged = profile
+    ? bankId !== (profile.bank?.id ?? "") ||
+      accountNumber !== (profile.account_number ?? "")
+    : true;
+  const verifiedName =
+    profile && !destinationChanged ? profile.account_name : null;
 
   if (!profile) {
     return (
@@ -343,13 +359,23 @@ export function MeClient() {
           <CardHeader>
             <CardTitle>Bank details</CardTitle>
             <CardDescription>
-              Where approved withdrawals are paid out.
+              Where approved withdrawals are paid out. Paystack verifies the
+              account name — you never type it.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="bank">Bank</Label>
-              <BankSelect id="bank" banks={banks} value={bankId} onChange={setBankId} />
+              <BankSelect
+                id="bank"
+                banks={banks}
+                value={bankId}
+                onChange={(id) => {
+                  setBankId(id);
+                  clearField("bank");
+                }}
+              />
+              <FieldError message={errors.bank} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="account_number">Account number</Label>
@@ -362,6 +388,16 @@ export function MeClient() {
                 placeholder="e.g. 0123456789"
               />
               <FieldError message={errors.account_number} />
+              {verifiedName ? (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                  <BadgeCheck className="size-3.5 shrink-0" />
+                  Verified: {verifiedName}
+                </p>
+              ) : bankId && accountNumber.length === 10 ? (
+                <p className="text-xs text-muted-foreground">
+                  Save to verify this account with Paystack.
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>
